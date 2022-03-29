@@ -1,0 +1,5 @@
+tensorflow-metal
+keras
+numpy~=1.22.3
+
+nibabel~=3.2.1
