@@ -130,7 +130,7 @@ def main():
     # data loading
     path = os.path.join(datapath)
     # test_path = os.path.join(datapath, "test/")
-    train_set, test_set = create_pipeline(path, bs=bs)
+    train_set, test_set = create_pipeline(path, performance, bs=bs)
 
     # model building
     model = model_builder("unet", datapath, pretrained_weights, da)

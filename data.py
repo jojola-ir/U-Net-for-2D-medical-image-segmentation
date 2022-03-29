@@ -139,8 +139,8 @@ def create_pipeline(path, performance=False, bs=256):
     """
 
     data_gen_args = dict(rescale=1. / 255,
-                         # featurewise_center=True,
-                         # featurewise_std_normalization=True,
+                          featurewise_center=True,
+                          featurewise_std_normalization=True,
                          # rotation_range=90,
                          # width_shift_range=0.2,
                          # height_shift_range=0.2,
