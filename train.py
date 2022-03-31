@@ -149,12 +149,21 @@ def main():
     EPOCH_STEP_TEST = NUM_TEST // bs
 
     # training and evaluation
-    model.fit_generator(generator=train_set,
+    """model.fit_generator(generator=train_set,
                         steps_per_epoch=EPOCH_STEP_TRAIN,
                         validation_data=val_set,
                         validation_steps=EPOCH_STEP_TEST,
                         epochs=epochs,
-                        callbacks=[cb])
+                        callbacks=[cb])"""
+
+    model.fit(x=train_set,
+              epochs=epochs,
+              verbose='auto',
+              callbacks=cb,
+              validation_data=val_set,
+              steps_per_epoch=EPOCH_STEP_TRAIN,
+              validation_steps=EPOCH_STEP_TEST)
+
 
     _, test_metrics = model.evaluate(test_set)
     print("Test set accuracy: {:.02f}%".format(test_metrics * 100))
