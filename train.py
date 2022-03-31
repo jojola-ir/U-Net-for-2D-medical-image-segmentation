@@ -130,11 +130,11 @@ def main():
     # data loading
     path = os.path.join(datapath)
     # test_path = os.path.join(datapath, "test/")
-    train_set, test_set = create_pipeline(path, performance, bs=bs)
+    train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
     # model building
     model = model_builder("unet", datapath, pretrained_weights, da)
-    optimizer = keras.optimizers.Nadam(lr=lr)
+    optimizer = keras.optimizers.Nadam(learning_rate=lr)
     model.compile(loss="binary_crossentropy",
                   optimizer=optimizer,
                   metrics=["accuracy"])
@@ -151,9 +151,11 @@ def main():
     # training and evaluation
     model.fit_generator(generator=train_set,
                         steps_per_epoch=EPOCH_STEP_TRAIN,
-                        validation_data=test_set,
+                        validation_data=val_set,
                         validation_steps=EPOCH_STEP_TEST,
-                        epochs=epochs)
+                        epochs=epochs,
+                        callbacks=[cb])
+
     _, test_metrics = model.evaluate(test_set)
     print("Test set accuracy: {:.02f}%".format(test_metrics * 100))
 

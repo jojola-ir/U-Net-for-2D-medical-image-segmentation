@@ -138,7 +138,7 @@ def create_pipeline(path, performance=False, bs=256):
         datasets for training, validating and testing
     """
 
-    data_gen_args = dict(rescale=1. / 255,
+    train_data_gen_args = dict(rescale=1. / 255,
                           featurewise_center=True,
                           featurewise_std_normalization=True,
                          # rotation_range=90,
@@ -147,14 +147,24 @@ def create_pipeline(path, performance=False, bs=256):
                          # zoom_range=0.3
                          )
 
+    test_data_gen_args = dict(rescale=1. / 255,
+                               featurewise_center=True,
+                               featurewise_std_normalization=True,
+                                rotation_range=90,
+                                width_shift_range=0.2,
+                                height_shift_range=0.2,
+                                zoom_range=0.3
+                               )
+
     img_height = 320
     img_width = 320
 
-    datagen = ImageDataGenerator(**data_gen_args, validation_split=0.2)
+    train_datagen = ImageDataGenerator(**train_data_gen_args, validation_split=0.2)
+    test_datagen = ImageDataGenerator(**test_data_gen_args, validation_split=0.2)
 
     print("Creating the full train dataset")
-    train_image_generator = datagen.flow_from_directory(
-        os.path.join(path, "images/"),
+    train_image_generator = train_datagen.flow_from_directory(
+        os.path.join(path, "train/images/"),
         target_size=(img_height, img_width),
         class_mode=None,
         color_mode='grayscale',
@@ -162,8 +172,8 @@ def create_pipeline(path, performance=False, bs=256):
         seed=0,
         subset="training")
 
-    train_mask_generator = datagen.flow_from_directory(
-        os.path.join(path, "masks/"),
+    train_mask_generator = train_datagen.flow_from_directory(
+        os.path.join(path, "train/masks/"),
         target_size=(img_height, img_width),
         class_mode=None,
         color_mode='grayscale',
@@ -171,19 +181,42 @@ def create_pipeline(path, performance=False, bs=256):
         seed=0,
         subset="training")
 
-    test_image_generator = datagen.flow_from_directory(
-        os.path.join(path, "images/"),
+    val_image_generator = train_datagen.flow_from_directory(
+        os.path.join(path, "train/images/"),
         target_size=(img_height, img_width),
+        class_mode=None,
+        color_mode='grayscale',
         batch_size=bs,
+        seed=202,
         subset="validation")
 
-    test_mask_generator = datagen.flow_from_directory(
-        os.path.join(path, "masks/"),
+    val_mask_generator = train_datagen.flow_from_directory(
+        os.path.join(path, "train/masks/"),
         target_size=(img_height, img_width),
+        class_mode=None,
+        color_mode='grayscale',
         batch_size=bs,
+        seed=202,
         subset="validation")
+
+    test_image_generator = test_datagen.flow_from_directory(
+        os.path.join(path, "test/images/"),
+        target_size=(img_height, img_width),
+        class_mode=None,
+        color_mode='grayscale',
+        seed=909,
+        batch_size=bs)
+
+    test_mask_generator = test_datagen.flow_from_directory(
+        os.path.join(path, "test/masks/"),
+        target_size=(img_height, img_width),
+        class_mode=None,
+        color_mode='grayscale',
+        seed=909,
+        batch_size=bs)
 
     train_pipeline = zip(train_image_generator, train_mask_generator)
+    val_pipeline = zip(val_image_generator, val_mask_generator)
     test_pipeline = zip(test_image_generator, test_mask_generator)
 
     # train_dataset = full_pipeline.skip(10)
@@ -191,10 +224,11 @@ def create_pipeline(path, performance=False, bs=256):
 
     if performance:
         train_pipeline = configure_for_performance(train_pipeline)
+        val_pipeline = configure_for_performance(val_pipeline)
         test_pipeline = configure_for_performance(test_pipeline)
 
     # return train_dataset, val_dataset
-    return train_pipeline, test_pipeline
+    return train_pipeline, val_pipeline, test_pipeline
 
 
 def preprocess(ds):
