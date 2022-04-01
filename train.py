@@ -165,7 +165,8 @@ def main():
               validation_steps=EPOCH_STEP_TEST)
 
 
-    _, test_metrics = model.evaluate(test_set)
+    _, test_metrics = model.evaluate(x=test_set,
+                                     steps=EPOCH_STEP_TEST)
     print("Test set accuracy: {:.02f}%".format(test_metrics * 100))
 
 
