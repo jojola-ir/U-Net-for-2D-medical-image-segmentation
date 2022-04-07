@@ -2,6 +2,7 @@
 
 import argparse
 import os
+from datetime import datetime
 
 from tensorflow import keras
 
@@ -94,6 +95,7 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", early_stop=False):
 
 def main():
     """Main function."""
+    now = datetime.now()
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", "-e", type=int, default=10,
@@ -111,8 +113,8 @@ def main():
     parser.add_argument("--batch", "-b", type=int, default=32,
                         help="batch size")
     parser.add_argument("--datapath", help="path to the dataset")
-    parser.add_argument("--log", default="logs/run2", help="set path to logs")
-    parser.add_argument("--checkpoint", "-c", default="models/run1.h5",
+    parser.add_argument("--log", default=f"logs/run2{now.strftime('%H_%M')}", help="set path to logs")
+    parser.add_argument("--checkpoint", "-c", default=f"models/run{now.strftime('%H_%M')}.h5",
                         help="set checkpoints path and name")
 
     args = parser.parse_args()
