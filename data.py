@@ -3,6 +3,7 @@ import argparse
 import glob
 import os
 
+import imageio.core.util
 import nibabel as nib
 import numpy as np
 import tensorflow as tf
@@ -16,9 +17,15 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 SLICE_X = True
 SLICE_Y = True
-SLICE_Z = False
+SLICE_Z = True
 
 SLICE_DECIMATE_IDENTIFIER = 3
+
+
+def silence_imageio_warning(*args, **kwargs):
+    pass
+
+imageio.core.util._precision_warn = silence_imageio_warning
 
 
 def configure_for_performance(ds):
@@ -42,9 +49,9 @@ def configure_for_performance(ds):
 
 
 def saveSlice(img, fname, path):
-    # img = np.uint8(img * 255)
+    #img = np.uint8(img * 255)
     fout = os.path.join(path, f'{fname}.png')
-    io.imsave(fout, img)
+    io.imsave(fout, img, check_contrast=False)
     print(f'[+] Slice saved: {fout}', end='\r')
 
 
@@ -255,9 +262,10 @@ def main():
     """This is the main function"""
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--generate", default=False, help="generate ")
+    parser.add_argument("--generate", "-g", default=False, help="generate slices",
+                        action="store_true")
     parser.add_argument("--batch", "-b", type=int,
-                        help="batch size")
+                        help="batch size", default=8)
     parser.add_argument("--datapath", help="path to the dataset")
     parser.add_argument("--output", help="path to the output")
 
