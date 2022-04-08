@@ -25,6 +25,7 @@ SLICE_DECIMATE_IDENTIFIER = 3
 def silence_imageio_warning(*args, **kwargs):
     pass
 
+
 imageio.core.util._precision_warn = silence_imageio_warning
 
 
@@ -49,7 +50,7 @@ def configure_for_performance(ds):
 
 
 def saveSlice(img, fname, path):
-    #img = np.uint8(img * 255)
+    # img = np.uint8(img * 255)
     fout = os.path.join(path, f'{fname}.png')
     io.imsave(fout, img, check_contrast=False)
     print(f'[+] Slice saved: {fout}', end='\r')
@@ -146,18 +147,16 @@ def create_pipeline(path, performance=False, bs=256):
     """
 
     train_data_gen_args = dict(rescale=1. / 255,
-                          featurewise_center=True,
-                          featurewise_std_normalization=True,
-                          fill_mode='reflect'
-                         # rotation_range=90,
-                         # width_shift_range=0.2,
-                         # height_shift_range=0.2,
-                         # zoom_range=0.3
-                         )
+                               featurewise_center=True,
+                               featurewise_std_normalization=True,
+                               fill_mode='reflect',
+                               rotation_range=90,
+                               width_shift_range=0.2,
+                               height_shift_range=0.2,
+                               zoom_range=0.3
+                               )
 
     test_data_gen_args = dict(rescale=1. / 255,
-                              featurewise_center=True,
-                              featurewise_std_normalization=True,
                               rotation_range=90,
                               width_shift_range=0.2,
                               height_shift_range=0.2,
