@@ -114,7 +114,7 @@ def main():
     parser.add_argument("--batch", "-b", type=int, default=32,
                         help="batch size")
     parser.add_argument("--datapath", help="path to the dataset")
-    parser.add_argument("--log", default=f"logs/run2{now.strftime('%H_%M')}", help="set path to logs")
+    parser.add_argument("--log", default=f"logs/run{now.strftime('%H_%M')}", help="set path to logs")
     parser.add_argument("--checkpoint", "-c", default=f"models/run{now.strftime('%H_%M')}.h5",
                         help="set checkpoints path and name")
 
