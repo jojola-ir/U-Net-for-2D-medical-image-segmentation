@@ -7,6 +7,7 @@ from datetime import datetime
 from tensorflow import keras
 
 from data import create_pipeline
+from losses import weighted_cross_entropy
 from model import custom_model, unet
 
 NUM_TRAIN = 10240
@@ -135,9 +136,10 @@ def main():
     train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
     # model building
+    beta = 0.6
     model = model_builder("unet", datapath, pretrained_weights, da)
     optimizer = keras.optimizers.Nadam(learning_rate=lr)
-    model.compile(loss="binary_crossentropy",
+    model.compile(loss=weighted_cross_entropy(beta=beta),
                   optimizer=optimizer,
                   metrics=["accuracy"])
 
