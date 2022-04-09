@@ -112,7 +112,7 @@ def main():
     parser.add_argument("--augmentation", "-a", default=False,
                         help="activate data augmentation",
                         action="store_true")
-    parser.add_argument("--batch", "-b", type=int, default=32,
+    parser.add_argument("--batch", "-b", type=int, default=16,
                         help="batch size")
     parser.add_argument("--datapath", help="path to the dataset")
     parser.add_argument("--log", default=f"logs/run{now.strftime('%H_%M')}", help="set path to logs")
