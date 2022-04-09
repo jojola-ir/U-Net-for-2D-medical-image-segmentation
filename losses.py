@@ -1,19 +1,20 @@
 import tensorflow as tf
+from tensorflow.keras.losses import BinaryCrossentropy
 
-def DiceLoss(targets, inputs, smooth=1e-6):
+from metrics import dice_coeff
 
-    # flatten label and prediction tensors
-    inputs = tf.keras.layers.flatten(inputs)
-    targets = tf.keras.layers.flatten(targets)
 
-    intersection = tf.reduce_sum(targets * inputs)
-    dice = (2*intersection + smooth) / (tf.reduce_sum(targets) + tf.reduce_sum(inputs) + smooth)
+def dice_loss(targets, inputs):
+    loss = 1 - dice_coeff(targets, inputs)
+    return loss
 
-    return 1 - dice
+
+def bce_dice_loss(targets, inputs):
+    loss = BinaryCrossentropy(targets, inputs) + dice_loss(targets, inputs)
+    return loss
 
 
 def weighted_cross_entropy(beta):
-
     def loss(y_true, y_pred):
         weight_a = beta * tf.cast(y_true, tf.float32)
         weight_b = 1 - tf.cast(y_true, tf.float32)
