@@ -147,8 +147,6 @@ def create_pipeline(path, performance=False, bs=256):
     """
 
     train_data_gen_args = dict(rescale=1. / 255,
-                               featurewise_center=True,
-                               featurewise_std_normalization=True,
                                fill_mode='reflect',
                                rotation_range=90,
                                width_shift_range=0.2,
