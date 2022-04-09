@@ -8,10 +8,11 @@ from tensorflow import keras
 
 from data import create_pipeline
 from losses import weighted_cross_entropy
+from metrics import dice_coeff
 from model import custom_model, unet
 
-NUM_TRAIN = 10240
-NUM_TEST = 2560
+NUM_TRAIN = 2720
+NUM_TEST = 850
 
 
 def model_builder(model, datapath, pw, da):
@@ -132,7 +133,7 @@ def main():
 
     # data loading
     path = os.path.join(datapath)
-    # test_path = os.path.join(datapath, "test/")
+
     train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
     # model building
@@ -141,7 +142,7 @@ def main():
     optimizer = keras.optimizers.Nadam(learning_rate=lr)
     model.compile(loss=weighted_cross_entropy(beta=beta),
                   optimizer=optimizer,
-                  metrics=["accuracy"])
+                  metrics=["accuracy", dice_coeff])
 
     model.summary()
     # callbacks
