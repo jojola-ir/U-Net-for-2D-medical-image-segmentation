@@ -109,6 +109,11 @@ def main():
                         action="store_true")
     parser.add_argument("--weights", "-w", default="imagenet",
                         help="pretrained weights path, imagenet or None")
+    parser.add_argument("--transfert", "-t", default=False,
+                        help="train on pretrained weights",
+                        action="store_true")
+    parser.add_argument("--modelpath", default="/models/run1.h5",
+                        help="path to .h5 file for transfert learning")
     parser.add_argument("--augmentation", "-a", default=False,
                         help="activate data augmentation",
                         action="store_true")
@@ -122,6 +127,7 @@ def main():
     args = parser.parse_args()
 
     datapath = args.datapath
+    transfert_learning = args.transfert
     epochs = args.epochs
     lr = args.lr
     logpath = args.log
@@ -137,10 +143,16 @@ def main():
     train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
     # model building
-    beta = 0.6
-    model = model_builder("unet", datapath, pretrained_weights, da)
+    if transfert_learning:
+        model_path = args.modelpath
+        model = keras.models.load_model(model_path,
+                                        custom_objects={'dice_coeff': dice_coeff})
+    else:
+        model = model_builder("unet", datapath, pretrained_weights, da)
+
     optimizer = keras.optimizers.Nadam(learning_rate=lr)
-    model.compile(loss=weighted_cross_entropy(beta=beta),
+    model.compile(loss="binary_crossentropy",
+                  loss_weights=[1, 10],
                   optimizer=optimizer,
                   metrics=["accuracy", dice_coeff])
 
@@ -169,9 +181,8 @@ def main():
               steps_per_epoch=EPOCH_STEP_TRAIN,
               validation_steps=EPOCH_STEP_TEST)
 
-
-    _, test_metrics = model.evaluate(x=test_set,
-                                     steps=EPOCH_STEP_TEST)
+    _, test_metrics, *placeholder = model.evaluate(x=test_set,
+                                                   steps=EPOCH_STEP_TEST)
     print("Test set accuracy: {:.02f}%".format(test_metrics * 100))
 
 

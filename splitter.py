@@ -40,8 +40,10 @@ def random_splitter(src, dest, test_rate, clear):
                             os.remove(maskpath)
         print(f"Images found : {k}")
 
+    val_rate = 0.1
+
     splitfolders.ratio(src, output=dest,
-                       seed=1337, ratio=(1 - test_rate, 0, test_rate), group_prefix=None, move=False)
+                       seed=1337, ratio=(1 - (test_rate + val_rate), 0.1, test_rate), group_prefix=None, move=False)
 
 
 

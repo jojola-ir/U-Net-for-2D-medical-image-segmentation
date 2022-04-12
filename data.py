@@ -1,7 +1,7 @@
 '''Dataloader'''
 import argparse
-import glob
 import os
+from glob import iglob
 
 import imageio.core.util
 import nibabel as nib
@@ -111,13 +111,13 @@ def generate_dataset(path_to_images, path_to_output, organ="heart"):
     if os.path.exists(maskSliceOutput) is False:
         os.mkdir(maskSliceOutput)
 
-    for index, filename in enumerate(sorted(glob.iglob(imagePathInput + '*.nii.gz'))):
+    for index, filename in enumerate(sorted(iglob(imagePathInput + '*.nii.gz'))):
         img = nib.load(filename).get_fdata()
         print(filename, img.shape, np.sum(img.shape), np.min(img), np.max(img))
         numOfSlices = sliceAndSaveVolumeImage(img, organ + str(index), imageSliceOutput)
         print(f'\n{filename}, {numOfSlices} slices created \n')
 
-    for index, filename in enumerate(sorted(glob.iglob(maskPathInput + '*.nii.gz'))):
+    for index, filename in enumerate(sorted(iglob(maskPathInput + '*.nii.gz'))):
         img = nib.load(filename).get_fdata()
         print(filename, img.shape, np.sum(img.shape), np.min(img), np.max(img))
         numOfSlices = sliceAndSaveVolumeImage(img, organ + str(index), maskSliceOutput)
@@ -235,6 +235,194 @@ def create_pipeline(path, performance=False, bs=256):
 
     # return train_dataset, val_dataset
     return train_pipeline, val_pipeline, test_pipeline
+
+'''
+def parse_image(path):
+    """Load an image and its annotation (mask) and returning
+    a dictionary.
+
+    Parameters
+    ----------
+    img_path : str
+        Image (not the mask) location.
+
+    Returns
+    -------
+    dict
+        Dictionary mapping an image and its annotation.
+    """
+
+    mask_path = tf.strings.regex_replace(path, "images", "masks")
+
+    image = tf.io.read_file(path)
+    image = tf.image.decode_png(image, channels=1)
+    image = tf.image.convert_image_dtype(image, tf.uint8)
+
+    mask = tf.io.read_file(mask_path)
+    mask = tf.image.decode_png(mask, channels=1)
+
+    return {'image': image, 'mask': mask}
+
+
+@tf.function
+def normalize(input_image, input_mask):
+    """Rescale the pixel values of the images between 0.0 and 1.0
+    compared to [0,255] originally.
+
+    Parameters
+    ----------
+    input_image : tf.Tensor
+        Tensorflow tensor containing an image of size [SIZE,SIZE,3].
+    input_mask : tf.Tensor
+        Tensorflow tensor containing an annotation of size [SIZE,SIZE,1].
+
+    Returns
+    -------
+    tuple
+        Normalized image and its annotation.
+    """
+    input_image = tf.cast(input_image, tf.float32) / 255.0
+
+    return input_image, input_mask
+
+
+@tf.function
+def load_image_train(datapoint):
+    """Apply some transformations to an input dictionary
+    containing a train image and its annotation.
+
+    Notes
+    -----
+    An annotation is a regular  channel image.
+    If a transformation such as rotation is applied to the image,
+    the same transformation has to be applied on the annotation also.
+
+    Parameters
+    ----------
+    datapoint : dict
+        A dict containing an image and its annotation.
+
+    Returns
+    -------
+    tuple
+        A modified image and its annotation.
+    """
+
+    IMG_SIZE = 320
+
+    input_image = tf.image.resize(datapoint['image'], (IMG_SIZE, IMG_SIZE))
+    input_mask = tf.image.resize(datapoint['mask'], (IMG_SIZE, IMG_SIZE))
+
+    if tf.random.uniform(()) > 0.5:
+        input_image = tf.image.flip_left_right(input_image)
+        input_mask = tf.image.flip_left_right(input_mask)
+
+    input_image, input_mask = normalize(input_image, input_mask)
+
+    return input_image, input_mask
+
+
+@tf.function
+def load_image_test(datapoint):
+    """Normalize and resize a test image and its annotation.
+
+    Notes
+    -----
+    Since this is for the test set, we don't need to apply
+    any data augmentation technique.
+
+    Parameters
+    ----------
+    datapoint : dict
+        A dict containing an image and its annotation.
+
+    Returns
+    -------
+    tuple
+        A modified image and its annotation.
+    """
+
+    IMG_SIZE = 320
+
+    input_image = tf.image.resize(datapoint['image'], (IMG_SIZE, IMG_SIZE))
+    input_mask = tf.image.resize(datapoint['mask'], (IMG_SIZE, IMG_SIZE))
+
+    input_image, input_mask = normalize(input_image, input_mask)
+
+    return input_image, input_mask
+
+
+def create_pipeline(path, bs=32):
+    """Creates datasets from a directory given as parameter.
+
+    The set given as input must include training and validation directory.
+
+    Parameters
+    ----------
+    path_to_dataset : str
+        Path to the dataset directory.
+
+    performance : boolean (False by default)
+        Enables or disables performance configuration.
+
+    bs : int
+        Batch size
+
+    Returns
+    -------
+    train_dataset, val_dataset, test_dataset
+        datasets for training, validating and testing
+    """
+
+    TRAIN_SEED = 202
+    VAL_SEED = 505
+    TEST_SEED = 909
+    SEED = 54
+
+    BUFFER_SIZE = 1000
+
+    train_dir = os.path.join(path, "train/")
+    val_dir = os.path.join(path, "val/")
+    test_dir = os.path.join(path, "test/")
+
+    train_dataset = tf.data.Dataset.list_files(train_dir + "images/*.png", seed=TRAIN_SEED, shuffle=False)
+    val_dataset = tf.data.Dataset.list_files(val_dir + "images/*.png", seed=VAL_SEED, shuffle=False)
+    test_dataset = tf.data.Dataset.list_files(test_dir + "images/*.png", seed=TEST_SEED, shuffle=False)
+
+    train_dataset = train_dataset.map(parse_image)
+    val_dataset = val_dataset.map(parse_image)
+    test_dataset = test_dataset.map(parse_image)
+
+    train_num = len([file for file in glob(str(os.path.join(train_dir, "images/*")))])
+    val_num = len([file for file in glob(str(os.path.join(val_dir, "images/*")))])
+    test_num = len([file for file in glob(str(os.path.join(test_dir, "images/*")))])
+
+    dataset = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
+
+    # -- Train Dataset --#
+    dataset['train'] = dataset['train'].map(load_image_train, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset['train'] = dataset['train'].shuffle(buffer_size=BUFFER_SIZE, seed=SEED)
+    dataset['train'] = dataset['train'].repeat()
+    dataset['train'] = dataset['train'].batch(bs)
+    dataset['train'] = dataset['train'].prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
+    # -- Validation Dataset --#
+    dataset['val'] = dataset['val'].map(load_image_test)
+    dataset['val'] = dataset['val'].repeat()
+    dataset['val'] = dataset['val'].batch(bs)
+    dataset['val'] = dataset['val'].prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
+    # -- Test Dataset --#
+    dataset['test'] = dataset['test'].map(load_image_test)
+    dataset['test'] = dataset['test'].repeat()
+    dataset['test'] = dataset['test'].batch(bs)
+    dataset['test'] = dataset['test'].prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+
+    print(f"{train_num} images found in {train_dir}.")
+    print(f"{val_num} images found in {val_dir}.")
+    print(f"{test_num} images found in {test_dir}.")
+
+    return dataset['train'], dataset['val'], dataset['test']'''
 
 
 def preprocess(ds):
