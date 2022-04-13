@@ -7,6 +7,7 @@ from datetime import datetime
 from tensorflow import keras
 
 from data import create_pipeline, create_pipeline_performance
+from losses import weighted_cross_entropy
 from metrics import dice_coeff
 from model import custom_model, unet
 
@@ -81,7 +82,7 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", early_stop=False):
     callbacks = []
 
     if early_stop:
-        early_stopping_cb = keras.callbacks.EarlyStopping(patience=20)
+        early_stopping_cb = keras.callbacks.EarlyStopping(patience=5, verbose=1)
         callbacks.append(early_stopping_cb)
 
     checkpoint_cb = keras.callbacks.ModelCheckpoint(checkpoint_path,
@@ -119,8 +120,8 @@ def main():
     parser.add_argument("--batch", "-b", type=int, default=16,
                         help="batch size")
     parser.add_argument("--datapath", help="path to the dataset")
-    parser.add_argument("--log", default=f"logs/run{now.strftime('%H_%M')}", help="set path to logs")
-    parser.add_argument("--checkpoint", "-c", default=f"models/run{now.strftime('%H_%M')}.h5",
+    parser.add_argument("--log", default=f"logs/run{now.strftime('%m_%d_%H_%M')}", help="set path to logs")
+    parser.add_argument("--checkpoint", "-c", default=f"models/run{now.strftime('%m_%d_%H_%M')}.h5",
                         help="set checkpoints path and name")
 
     args = parser.parse_args()
@@ -152,13 +153,17 @@ def main():
     else:
         model = model_builder("unet", datapath, pretrained_weights, da)
 
+    losses = ["binary_crossentropy", weighted_cross_entropy]
+    lw = [1.0, 0.6]
+
     optimizer = keras.optimizers.Nadam(learning_rate=lr)
-    model.compile(loss="binary_crossentropy",
-                  loss_weights=[1, 10],
+    model.compile(loss=losses,
+                  loss_weights=lw,
                   optimizer=optimizer,
-                  metrics=["accuracy", dice_coeff])
+                  metrics=[dice_coeff])
 
     model.summary()
+
     # callbacks
     run_logs = logpath
     checkpoint_path = cppath
@@ -183,9 +188,9 @@ def main():
               steps_per_epoch=EPOCH_STEP_TRAIN,
               validation_steps=EPOCH_STEP_TEST)
 
-    _, test_metrics, *placeholder = model.evaluate(x=test_set,
+    _, dice_metrics = model.evaluate(x=test_set,
                                                    steps=EPOCH_STEP_TEST)
-    print("Test set accuracy: {:.02f}%".format(test_metrics * 100))
+    print("Dice coefficient: {:.02f}".format(dice_metrics))
 
 
 if __name__ == "__main__":
