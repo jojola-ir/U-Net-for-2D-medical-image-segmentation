@@ -6,8 +6,7 @@ from datetime import datetime
 
 from tensorflow import keras
 
-from data import create_pipeline
-from losses import weighted_cross_entropy
+from data import create_pipeline, create_pipeline_performance
 from metrics import dice_coeff
 from model import custom_model, unet
 
@@ -140,7 +139,10 @@ def main():
     # data loading
     path = os.path.join(datapath)
 
-    train_set, val_set, test_set = create_pipeline(path, bs=bs)
+    if performance:
+        train_set, val_set, test_set = create_pipeline_performance(path, bs=bs)
+    else:
+        train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
     # model building
     if transfert_learning:
