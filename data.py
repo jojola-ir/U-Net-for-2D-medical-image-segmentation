@@ -282,6 +282,7 @@ def normalize(input_image, input_mask):
         Normalized image and its annotation.
     """
     input_image = tf.cast(input_image, tf.float32) / 255.0
+    input_mask = tf.cast(input_mask, tf.float32) / 255.0
 
     return input_image, input_mask
 
@@ -400,30 +401,30 @@ def create_pipeline_performance(path, bs=256):
     dataset = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
 
     # -- Train Dataset --#
-    dataset['train'] = dataset['train'].map(load_image_train, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset['train'] = dataset['train'].cache()
-    dataset['train'] = dataset['train'].shuffle(buffer_size=BUFFER_SIZE, seed=SEED)
-    dataset['train'] = dataset['train'].repeat()
-    dataset['train'] = dataset['train'].batch(bs)
-    dataset['train'] = dataset['train'].prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    dataset["train"] = dataset["train"].map(load_image_train, num_parallel_calls=tf.data.AUTOTUNE)
+    dataset["train"] = dataset["train"].cache()
+    dataset["train"] = dataset["train"].shuffle(buffer_size=BUFFER_SIZE, seed=SEED)
+    dataset["train"] = dataset["train"].repeat()
+    dataset["train"] = dataset["train"].batch(bs)
+    dataset["train"] = dataset["train"].prefetch(buffer_size=tf.data.AUTOTUNE)
 
     # -- Validation Dataset --#
-    dataset['val'] = dataset['val'].map(load_image_test)
-    dataset['val'] = dataset['val'].repeat()
-    dataset['val'] = dataset['val'].batch(bs)
-    dataset['val'] = dataset['val'].prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    dataset["val"] = dataset["val"].map(load_image_test)
+    dataset["val"] = dataset["val"].repeat()
+    dataset["val"] = dataset["val"].batch(bs)
+    dataset["val"] = dataset["val"].prefetch(buffer_size=tf.data.AUTOTUNE)
 
     # -- Test Dataset --#
-    dataset['test'] = dataset['test'].map(load_image_test)
-    dataset['test'] = dataset['test'].repeat()
-    dataset['test'] = dataset['test'].batch(bs)
-    dataset['test'] = dataset['test'].prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    dataset["test"] = dataset["test"].map(load_image_test)
+    dataset["test"] = dataset["test"].repeat()
+    dataset["test"] = dataset["test"].batch(bs)
+    dataset["test"] = dataset["test"].prefetch(buffer_size=tf.data.AUTOTUNE)
 
     print(f"{train_num} images found in {train_dir}.")
     print(f"{val_num} images found in {val_dir}.")
     print(f"{test_num} images found in {test_dir}.")
 
-    return dataset['train'], dataset['val'], dataset['test']
+    return dataset["train"], dataset["val"], dataset["test"]
 
 
 def preprocess(ds):
