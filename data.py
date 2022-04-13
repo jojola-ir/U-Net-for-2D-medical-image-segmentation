@@ -236,7 +236,7 @@ def create_pipeline(path, performance=False, bs=256):
     # return train_dataset, val_dataset
     return train_pipeline, val_pipeline, test_pipeline
 
-'''
+
 def parse_image(path):
     """Load an image and its annotation (mask) and returning
     a dictionary.
@@ -352,7 +352,7 @@ def load_image_test(datapoint):
     return input_image, input_mask
 
 
-def create_pipeline(path, bs=32):
+def create_pipeline_performance(path, bs=32):
     """Creates datasets from a directory given as parameter.
 
     The set given as input must include training and validation directory.
@@ -422,7 +422,7 @@ def create_pipeline(path, bs=32):
     print(f"{val_num} images found in {val_dir}.")
     print(f"{test_num} images found in {test_dir}.")
 
-    return dataset['train'], dataset['val'], dataset['test']'''
+    return dataset['train'], dataset['val'], dataset['test']
 
 
 def preprocess(ds):
