@@ -1,7 +1,7 @@
 '''Dataloader'''
 import argparse
 import os
-from glob import iglob
+from glob import glob, iglob
 
 import imageio.core.util
 import nibabel as nib
