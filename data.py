@@ -352,7 +352,7 @@ def load_image_test(datapoint):
     return input_image, input_mask
 
 
-def create_pipeline_performance(path, bs=32):
+def create_pipeline_performance(path, bs=256):
     """Creates datasets from a directory given as parameter.
 
     The set given as input must include training and validation directory.
@@ -401,6 +401,7 @@ def create_pipeline_performance(path, bs=32):
 
     # -- Train Dataset --#
     dataset['train'] = dataset['train'].map(load_image_train, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset['train'] = dataset['train'].cache()
     dataset['train'] = dataset['train'].shuffle(buffer_size=BUFFER_SIZE, seed=SEED)
     dataset['train'] = dataset['train'].repeat()
     dataset['train'] = dataset['train'].batch(bs)
