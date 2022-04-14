@@ -30,7 +30,7 @@ def random_splitter(src, dest, test_rate, clear):
         for root, _, files in os.walk(src):
             if root == os.path.join(src, "masks"):
                 for f in files:
-                    if not f.endswith('.DS_Store'):
+                    if not f.endswith(".DS_Store"):
                         maskpath = os.path.join(root, f)
                         imagepath = os.path.join(os.path.join(src, "images/"), f)
                         if os.lstat(maskpath).st_size <= 120:  # set file size in kb
