@@ -53,7 +53,7 @@ def model_builder(model, datapath, pw, da):
     return model
 
 
-def create_callbacks(run_logdir, checkpoint_path="model.h5", early_stop=False):
+def create_callbacks(run_logdir, checkpoint_path="model.h5", patience=2, early_stop=False):
     """Creates a tab composed of defined callbacks.
 
     Early stopping is disabled by default.
@@ -82,7 +82,7 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", early_stop=False):
     callbacks = []
 
     if early_stop:
-        early_stopping_cb = keras.callbacks.EarlyStopping(patience=5, verbose=1)
+        early_stopping_cb = keras.callbacks.EarlyStopping(patience=patience, verbose=1)
         callbacks.append(early_stopping_cb)
 
     checkpoint_cb = keras.callbacks.ModelCheckpoint(checkpoint_path,
@@ -164,10 +164,22 @@ def main():
 
     model.summary()
 
+    model_architecture_path = "architecture/"
+    if os.path.exists(model_architecture_path) is False:
+        os.makedirs(model_architecture_path)
+    keras.utils.plot_model(model,
+                           to_file=os.path.join(model_architecture_path,
+                                                       f"model_unet_{now.strftime('%m_%d_%H_%M')}.png"),
+                           show_shapes=True)
+
     # callbacks
     run_logs = logpath
     checkpoint_path = cppath
-    cb = create_callbacks(run_logs, checkpoint_path)
+    if epochs < 30:
+        patience = 2
+    else:
+        patience = epochs // 10
+    cb = create_callbacks(run_logs, checkpoint_path, patience, True)
 
     EPOCH_STEP_TRAIN = NUM_TRAIN // bs
     EPOCH_STEP_TEST = NUM_TEST // bs
