@@ -66,8 +66,12 @@ def unet(n_levels, initial_features=32, n_blocks=2, kernel_size=3, pooling_size=
     # downstream
     skips = {}
     for level in range(n_levels):
-        for _ in range(n_blocks):
+        for block in range(n_blocks):
             x = keras.layers.Conv2D(initial_features * 2 ** level, **convpars)(x)
+            if level <= n_levels // 2 and block == 0:
+                x = keras.layers.Dropout(0.1)(x)
+            elif level > n_levels // 2 and block == 0:
+                x = keras.layers.Dropout(0.2)(x)
         if level < n_levels - 1:
             skips[level] = x
             x = keras.layers.MaxPool2D(pooling_size)(x)
@@ -76,8 +80,12 @@ def unet(n_levels, initial_features=32, n_blocks=2, kernel_size=3, pooling_size=
     for level in reversed(range(n_levels - 1)):
         x = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x)
         x = keras.layers.Concatenate()([x, skips[level]])
-        for _ in range(n_blocks):
+        for block in range(n_blocks):
             x = keras.layers.Conv2D(initial_features * 2 ** level, **convpars)(x)
+            if level > n_levels // 2 and block == 0:
+                x = keras.layers.Dropout(0.1)(x)
+            elif level <= n_levels // 2 and block == 0:
+                x = keras.layers.Dropout(0.2)(x)
 
     # output
     activation = 'sigmoid' if out_channels == 1 else 'softmax'
