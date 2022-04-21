@@ -5,7 +5,6 @@ from glob import glob, iglob
 
 import imageio.core.util
 import nibabel as nib
-import numpy as np
 import tensorflow as tf
 from skimage import io
 from tensorflow.keras.layers.experimental.preprocessing import (RandomFlip,
@@ -80,7 +79,7 @@ def sliceAndSaveVolumeImage(vol, fname, path):
     return cnt
 
 
-def generate_dataset(path_to_images, path_to_output, organ="heart"):
+def generate_dataset(path_to_images, path_to_output, organ="heart", test=False):
     """Generates .png images from .nii images.
 
     Parameters
@@ -99,29 +98,48 @@ def generate_dataset(path_to_images, path_to_output, organ="heart"):
     None
     """
 
-    imagePathInput = os.path.join(path_to_images, 'imagesTr/')
-    maskPathInput = os.path.join(path_to_images, 'labelsTr/')
+    if test:
+        imagePathInput = os.path.join(path_to_images, 'imagesTs/')
 
-    imageSliceOutput = os.path.join(path_to_output, 'images/')
-    maskSliceOutput = os.path.join(path_to_output, 'mask/')
+        imageSliceOutput = os.path.join(path_to_output, 'images/')
 
-    if os.path.exists(imageSliceOutput) is False:
-        os.mkdir(imageSliceOutput)
+        for root, _, files in os.walk(imagePathInput):
+            for f in files:
+                print(f)
 
-    if os.path.exists(maskSliceOutput) is False:
-        os.mkdir(maskSliceOutput)
+        if os.path.exists(imageSliceOutput) is False:
+            os.makedirs(imageSliceOutput)
 
-    for index, filename in enumerate(sorted(iglob(imagePathInput + '*.nii.gz'))):
-        img = nib.load(filename).get_fdata()
-        print(filename, img.shape, np.sum(img.shape), np.min(img), np.max(img))
-        numOfSlices = sliceAndSaveVolumeImage(img, organ + str(index), imageSliceOutput)
-        print(f'\n{filename}, {numOfSlices} slices created \n')
+        for index, filename in enumerate(sorted(iglob(imagePathInput + '*.nii.gz'))):
+            img = nib.load(filename).get_fdata()
+            print(filename, img.shape, np.sum(img.shape), np.min(img), np.max(img))
+            numOfSlices = sliceAndSaveVolumeImage(img, organ + str(index), imageSliceOutput)
+            print(f'\n{filename}, {numOfSlices} slices created \n')
 
-    for index, filename in enumerate(sorted(iglob(maskPathInput + '*.nii.gz'))):
-        img = nib.load(filename).get_fdata()
-        print(filename, img.shape, np.sum(img.shape), np.min(img), np.max(img))
-        numOfSlices = sliceAndSaveVolumeImage(img, organ + str(index), maskSliceOutput)
-        print(f'\n{filename}, {numOfSlices} slices created \n')
+    else:
+        imagePathInput = os.path.join(path_to_images, 'imagesTr/')
+        maskPathInput = os.path.join(path_to_images, 'labelsTr/')
+
+        imageSliceOutput = os.path.join(path_to_output, 'images/')
+        maskSliceOutput = os.path.join(path_to_output, 'mask/')
+
+        if os.path.exists(imageSliceOutput) is False:
+            os.makedirs(imageSliceOutput)
+
+        if os.path.exists(maskSliceOutput) is False:
+            os.makedirs(maskSliceOutput)
+
+        for index, filename in enumerate(sorted(iglob(imagePathInput + '*.nii.gz'))):
+            img = nib.load(filename).get_fdata()
+            print(filename, img.shape, np.sum(img.shape), np.min(img), np.max(img))
+            numOfSlices = sliceAndSaveVolumeImage(img, organ + str(index), imageSliceOutput)
+            print(f'\n{filename}, {numOfSlices} slices created \n')
+
+        for index, filename in enumerate(sorted(iglob(maskPathInput + '*.nii.gz'))):
+            img = nib.load(filename).get_fdata()
+            print(filename, img.shape, np.sum(img.shape), np.min(img), np.max(img))
+            numOfSlices = sliceAndSaveVolumeImage(img, organ + str(index), maskSliceOutput)
+            print(f'\n{filename}, {numOfSlices} slices created \n')
 
 
 def create_pipeline(path, performance=False, bs=256):
@@ -162,8 +180,8 @@ def create_pipeline(path, performance=False, bs=256):
                               fill_mode='reflect'
                               )
 
-    img_height = 320
-    img_width = 320
+    img_height = 160
+    img_width = 160
 
     train_datagen = ImageDataGenerator(**train_data_gen_args, validation_split=0.2)
     test_datagen = ImageDataGenerator(**test_data_gen_args, validation_split=0.2)
@@ -309,14 +327,26 @@ def load_image_train(datapoint):
         A modified image and its annotation.
     """
 
-    IMG_SIZE = 320
+    IMG_SIZE = 160
 
-    input_image = tf.image.resize(datapoint['image'], (IMG_SIZE, IMG_SIZE))
-    input_mask = tf.image.resize(datapoint['mask'], (IMG_SIZE, IMG_SIZE))
+    input_image = tf.image.resize_with_pad(datapoint['image'], IMG_SIZE, IMG_SIZE)
+    input_mask = tf.image.resize_with_pad(datapoint['mask'], IMG_SIZE, IMG_SIZE)
 
     if tf.random.uniform(()) > 0.5:
         input_image = tf.image.flip_left_right(input_image)
         input_mask = tf.image.flip_left_right(input_mask)
+
+    if tf.random.uniform(()) > 0.5:
+        input_image = tf.image.flip_up_down(input_image)
+        input_mask = tf.image.flip_up_down(input_mask)
+
+    if tf.random.uniform(()) > 0.5:
+        rd = np.random.random()
+        input_image = tf.image.central_crop(input_image, central_fraction=rd)
+        input_mask = tf.image.central_crop(input_mask, central_fraction=rd)
+
+    input_image = tf.image.random_brightness(input_image, 0.3)
+    input_image = tf.image.random_contrast(input_image, 0.2, 0.5)
 
     input_image, input_mask = normalize(input_image, input_mask)
 
@@ -343,7 +373,7 @@ def load_image_test(datapoint):
         A modified image and its annotation.
     """
 
-    IMG_SIZE = 320
+    IMG_SIZE = 160
 
     input_image = tf.image.resize(datapoint['image'], (IMG_SIZE, IMG_SIZE))
     input_mask = tf.image.resize(datapoint['mask'], (IMG_SIZE, IMG_SIZE))
@@ -353,7 +383,7 @@ def load_image_test(datapoint):
     return input_image, input_mask
 
 
-def create_pipeline_performance(path, bs=256):
+def create_pipeline_performance(path, bs=256, test=False):
     """Creates datasets from a directory given as parameter.
 
     The set given as input must include training and validation directory.
@@ -382,49 +412,61 @@ def create_pipeline_performance(path, bs=256):
 
     BUFFER_SIZE = 1000
 
-    train_dir = os.path.join(path, "train/")
-    val_dir = os.path.join(path, "val/")
-    test_dir = os.path.join(path, "test/")
+    if test:
+        datadir = os.path.join(path, "images/")
 
-    train_dataset = tf.data.Dataset.list_files(train_dir + "images/*.png", seed=TRAIN_SEED, shuffle=False)
-    val_dataset = tf.data.Dataset.list_files(val_dir + "images/*.png", seed=VAL_SEED, shuffle=False)
-    test_dataset = tf.data.Dataset.list_files(test_dir + "images/*.png", seed=TEST_SEED, shuffle=False)
+        dataset = tf.data.Dataset.list_files(datadir + "*.png", seed=SEED, shuffle=False)
 
-    train_dataset = train_dataset.map(parse_image)
-    val_dataset = val_dataset.map(parse_image)
-    test_dataset = test_dataset.map(parse_image)
+        data_num = len([file for file in glob(str(os.path.join(datadir, "*.png")))])
+        print(f"Pipeline of {data_num} images generated.")
 
-    train_num = len([file for file in glob(str(os.path.join(train_dir, "images/*")))])
-    val_num = len([file for file in glob(str(os.path.join(val_dir, "images/*")))])
-    test_num = len([file for file in glob(str(os.path.join(test_dir, "images/*")))])
+        return dataset
 
-    dataset = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
+    else:
+        train_dir = os.path.join(path, "train/")
+        val_dir = os.path.join(path, "val/")
+        test_dir = os.path.join(path, "test/")
 
-    # -- Train Dataset --#
-    dataset["train"] = dataset["train"].map(load_image_train, num_parallel_calls=tf.data.AUTOTUNE)
-    dataset["train"] = dataset["train"].cache()
-    dataset["train"] = dataset["train"].shuffle(buffer_size=BUFFER_SIZE, seed=SEED)
-    dataset["train"] = dataset["train"].repeat()
-    dataset["train"] = dataset["train"].batch(bs)
-    dataset["train"] = dataset["train"].prefetch(buffer_size=tf.data.AUTOTUNE)
+        train_dataset = tf.data.Dataset.list_files(train_dir + "images/*.png", seed=TRAIN_SEED, shuffle=False)
+        val_dataset = tf.data.Dataset.list_files(val_dir + "images/*.png", seed=VAL_SEED, shuffle=False)
+        test_dataset = tf.data.Dataset.list_files(test_dir + "images/*.png", seed=TEST_SEED, shuffle=False)
 
-    # -- Validation Dataset --#
-    dataset["val"] = dataset["val"].map(load_image_test)
-    dataset["val"] = dataset["val"].repeat()
-    dataset["val"] = dataset["val"].batch(bs)
-    dataset["val"] = dataset["val"].prefetch(buffer_size=tf.data.AUTOTUNE)
+        train_dataset = train_dataset.map(parse_image)
+        val_dataset = val_dataset.map(parse_image)
+        test_dataset = test_dataset.map(parse_image)
 
-    # -- Test Dataset --#
-    dataset["test"] = dataset["test"].map(load_image_test)
-    dataset["test"] = dataset["test"].repeat()
-    dataset["test"] = dataset["test"].batch(bs)
-    dataset["test"] = dataset["test"].prefetch(buffer_size=tf.data.AUTOTUNE)
+        train_num = len([file for file in glob(str(os.path.join(train_dir, "images/*.png")))])
+        val_num = len([file for file in glob(str(os.path.join(val_dir, "images/*.png")))])
+        test_num = len([file for file in glob(str(os.path.join(test_dir, "images/*.png")))])
 
-    print(f"{train_num} images found in {train_dir}.")
-    print(f"{val_num} images found in {val_dir}.")
-    print(f"{test_num} images found in {test_dir}.")
+        dataset = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
 
-    return dataset["train"], dataset["val"], dataset["test"]
+        # -- Train Dataset --#
+        dataset["train"] = dataset["train"].map(load_image_train, num_parallel_calls=tf.data.AUTOTUNE)
+        dataset["train"] = dataset["train"].cache()
+        dataset["train"] = dataset["train"].shuffle(buffer_size=BUFFER_SIZE, seed=SEED)
+        dataset["train"] = dataset["train"].repeat()
+        dataset["train"] = dataset["train"].batch(bs)
+        dataset["train"] = dataset["train"].prefetch(buffer_size=tf.data.AUTOTUNE)
+
+        # -- Validation Dataset --#
+        dataset["val"] = dataset["val"].map(load_image_test)
+        dataset["val"] = dataset["val"].repeat()
+        dataset["val"] = dataset["val"].batch(bs)
+        dataset["val"] = dataset["val"].prefetch(buffer_size=tf.data.AUTOTUNE)
+
+        # -- Test Dataset --#
+        dataset["test"] = dataset["test"].map(load_image_test)
+        dataset["test"] = dataset["test"].repeat()
+        dataset["test"] = dataset["test"].batch(bs)
+        dataset["test"] = dataset["test"].prefetch(buffer_size=tf.data.AUTOTUNE)
+
+        print(f"{train_num} images found in {train_dir}.")
+        print(f"{val_num} images found in {val_dir}.")
+        print(f"{test_num} images found in {test_dir}.")
+
+        return dataset["train"], dataset["val"], dataset["test"]
+
 
 
 def preprocess(ds):
@@ -457,17 +499,19 @@ def main():
                         help="batch size", default=8)
     parser.add_argument("--datapath", help="path to the dataset")
     parser.add_argument("--output", help="path to the output")
+    parser.add_argument("--test", "-t", help="path to the output", default=False, action="store_true")
 
     args = parser.parse_args()
 
     datapath = args.datapath
+    test = args.test
 
     data_path = os.path.join(datapath)
     print(os.path.isdir(data_path))
 
     if args.generate:
         output = args.output
-        generate_dataset(datapath, output)
+        generate_dataset(datapath, output, test=test)
 
     else:
         if args.batch:
@@ -476,7 +520,7 @@ def main():
             bs = 32
 
         # some manipulation on the data
-        train_set, test_set = create_pipeline(datapath, bs=bs)
+        train_set, test_set = create_pipeline_performance(datapath, bs=bs)
 
         for img, mask in train_set.take(1):
             print("One batch of data")
@@ -485,3 +529,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+import numpy as np
