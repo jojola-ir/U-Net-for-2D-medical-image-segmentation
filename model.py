@@ -39,7 +39,7 @@ def custom_model(clNbr, pw, da=False):
     return model
 
 
-def unet(n_levels, initial_features=32, n_blocks=2, kernel_size=3, pooling_size=2, in_channels=1, out_channels=1):
+def unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, pooling_size=2, in_channels=1, out_channels=1):
     """Build a neural network composed of UNET architecture.
 
     Parameters
@@ -55,8 +55,8 @@ def unet(n_levels, initial_features=32, n_blocks=2, kernel_size=3, pooling_size=
     model
         builded model
     """
-    IMAGE_HEIGHT = 320
-    IMAGE_WIDTH = 320
+    IMAGE_HEIGHT = 160
+    IMAGE_WIDTH = 160
 
     inputs = keras.layers.Input(shape=(IMAGE_HEIGHT, IMAGE_WIDTH, in_channels))
     x = inputs
