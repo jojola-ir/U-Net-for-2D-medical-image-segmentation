@@ -4,15 +4,18 @@ import argparse
 import os
 from datetime import datetime
 
+import segmentation_models as sm
 from tensorflow import keras
 
 from data import create_pipeline, create_pipeline_performance
-from losses import weighted_cross_entropy
 from metrics import dice_coeff
 from model import custom_model, unet
 
 NUM_TRAIN = 2720
 NUM_TEST = 850
+
+sm.set_framework('tf.keras')
+sm.framework()
 
 
 def model_builder(model, datapath, pw, da):
@@ -48,7 +51,16 @@ def model_builder(model, datapath, pw, da):
         model = custom_model(clNbr, pw, da)
 
     elif model == "unet":
-        model = unet(4)
+        model = unet(5)
+
+    elif model == "unet_vgg16":
+        model = sm.Unet("vgg16", encoder_weights="imagenet", classes=1, activation='sigmoid')
+
+    elif model == "unet_resnet50":
+        model = sm.Unet("resnet50", encoder_weights="imagenet", classes=1, activation='sigmoid')
+
+    elif model == "unet_inceptionv3":
+        model = sm.Unet("inceptionv3", encoder_weights="imagenet", classes=1, activation='sigmoid')
 
     return model
 
@@ -82,7 +94,11 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", patience=2, early_s
     callbacks = []
 
     if early_stop:
-        early_stopping_cb = keras.callbacks.EarlyStopping(patience=patience, verbose=1)
+        print(f"Early stopping patience : {patience}")
+        early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_dice_coeff",
+                                                          patience=patience,
+                                                          verbose=1,
+                                                          mode="max")
         callbacks.append(early_stopping_cb)
 
     checkpoint_cb = keras.callbacks.ModelCheckpoint(checkpoint_path,
@@ -91,6 +107,11 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", patience=2, early_s
 
     tensorboard_cb = keras.callbacks.TensorBoard(run_logdir)
     callbacks.append(tensorboard_cb)
+
+    remote_monitor_cb = keras.callbacks.RemoteMonitor(root="http://localhost:9000",
+                                                      path="/publish/epoch/end/",
+                                                      field="data")
+    callbacks.append(remote_monitor_cb)
 
     return callbacks
 
@@ -109,8 +130,10 @@ def main():
                         action="store_true")
     parser.add_argument("--weights", "-w", default="imagenet",
                         help="pretrained weights path, imagenet or None")
-    parser.add_argument("--transfert", "-t", default=False,
-                        help="train on pretrained weights",
+    parser.add_argument("--custom_model", default="unet",
+                        help="load custom or combined model")
+    parser.add_argument("--load", default=False,
+                        help="load previous model",
                         action="store_true")
     parser.add_argument("--modelpath", default="/models/run1.h5",
                         help="path to .h5 file for transfert learning")
@@ -127,7 +150,8 @@ def main():
     args = parser.parse_args()
 
     datapath = args.datapath
-    transfert_learning = args.transfert
+    custom_model = args.custom_model
+    load_model = args.load
     epochs = args.epochs
     lr = args.lr
     logpath = args.log
@@ -145,41 +169,62 @@ def main():
     else:
         train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
+
+    dice_loss = sm.losses.DiceLoss()
+    bf_loss = sm.losses.BinaryFocalLoss()
+
     # model building
-    if transfert_learning:
+    if load_model:
+        model_name = "custom"
         model_path = args.modelpath
         model = keras.models.load_model(model_path,
-                                        custom_objects={'dice_coeff': dice_coeff})
+                                        custom_objects={"dice_loss": dice_loss,
+                                                        "binary_focal_loss": bf_loss,
+                                                        "dice_coeff": dice_coeff,
+                                                        "iou_score": sm.metrics.iou_score})
+        print(f"Transfert learning from {model_path}")
     else:
-        model = model_builder("unet", datapath, pretrained_weights, da)
+        if custom_model.startswith("unet") is False:
+            #preprocess_input = sm.get_preprocessing(custom_model)
+            #train_set = preprocess_input(train_set)
+            #val_set = preprocess_input(val_set)
+            #test_set = preprocess_input(test_set)
+            model_name = "unet_" + custom_model
+        else:
+            model_name = custom_model
+        model = model_builder(model_name, datapath, pretrained_weights, da)
 
-    losses = ["binary_crossentropy", weighted_cross_entropy]
-    lw = [1.0, 0.6]
+    #losses = ["binary_crossentropy", weighted_cross_entropy]
+    losses = ["binary_crossentropy", dice_loss, bf_loss]
+    lw = [1.0, 0.5, 0.5]
+
+    metrics = [dice_coeff, sm.metrics.iou_score]
 
     optimizer = keras.optimizers.Nadam(learning_rate=lr)
     model.compile(loss=losses,
                   loss_weights=lw,
                   optimizer=optimizer,
-                  metrics=[dice_coeff])
+                  metrics=metrics)
 
     model.summary()
 
     model_architecture_path = "architecture/"
     if os.path.exists(model_architecture_path) is False:
         os.makedirs(model_architecture_path)
+
     keras.utils.plot_model(model,
                            to_file=os.path.join(model_architecture_path,
-                                                       f"model_unet_{now.strftime('%m_%d_%H_%M')}.png"),
+                                                       f"model_unet_{model_name}_{now.strftime('%m_%d_%H_%M')}.png"),
                            show_shapes=True)
 
     # callbacks
     run_logs = logpath
     checkpoint_path = cppath
-    if epochs < 30:
-        patience = 2
+    if epochs < 40:
+        cb_patience = 3
     else:
-        patience = epochs // 10
-    cb = create_callbacks(run_logs, checkpoint_path, patience, True)
+        cb_patience = epochs // 10
+    cb = create_callbacks(run_logs, checkpoint_path, cb_patience, True)
 
     EPOCH_STEP_TRAIN = NUM_TRAIN // bs
     EPOCH_STEP_TEST = NUM_TEST // bs
@@ -194,15 +239,16 @@ def main():
 
     model.fit(x=train_set,
               epochs=epochs,
-              verbose='auto',
+              verbose="auto",
               callbacks=cb,
               validation_data=val_set,
               steps_per_epoch=EPOCH_STEP_TRAIN,
               validation_steps=EPOCH_STEP_TEST)
 
-    _, dice_metrics = model.evaluate(x=test_set,
+    _, dice_metrics, iou_metrics = model.evaluate(x=test_set,
                                                    steps=EPOCH_STEP_TEST)
-    print("Dice coefficient: {:.02f}".format(dice_metrics))
+    print("Dice coefficient : {:.02f}".format(dice_metrics))
+    print("IoU score : {:.02f}".format(iou_metrics))
 
 
 if __name__ == "__main__":
