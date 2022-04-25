@@ -282,6 +282,28 @@ def parse_image(path):
     return {'image': image, 'mask': mask}
 
 
+def parse_image_reconstruction(path):
+    """Load an image and its annotation (mask) and returning
+    a dictionary.
+
+    Parameters
+    ----------
+    img_path : str
+        Image (not the mask) location.
+
+    Returns
+    -------
+    dict
+        Dictionary mapping an image and its annotation.
+    """
+
+    image = tf.io.read_file(path)
+    image = tf.image.decode_png(image, channels=1)
+    image = tf.image.convert_image_dtype(image, tf.uint8)
+
+    return {'image': image, 'mask': image}
+
+
 @tf.function
 def normalize(input_image, input_mask):
     """Rescale the pixel values of the images between 0.0 and 1.0
@@ -345,6 +367,9 @@ def load_image_train(datapoint):
         input_image = tf.image.central_crop(input_image, central_fraction=rd)
         input_mask = tf.image.central_crop(input_mask, central_fraction=rd)
 
+        input_image = tf.image.resize_with_pad(input_image, IMG_SIZE, IMG_SIZE)
+        input_mask = tf.image.resize_with_pad(input_mask, IMG_SIZE, IMG_SIZE)
+
     input_image = tf.image.random_brightness(input_image, 0.3)
     input_image = tf.image.random_contrast(input_image, 0.2, 0.5)
 
@@ -375,15 +400,15 @@ def load_image_test(datapoint):
 
     IMG_SIZE = 160
 
-    input_image = tf.image.resize(datapoint['image'], (IMG_SIZE, IMG_SIZE))
-    input_mask = tf.image.resize(datapoint['mask'], (IMG_SIZE, IMG_SIZE))
+    input_image = tf.image.resize_with_pad(datapoint['image'], (IMG_SIZE, IMG_SIZE))
+    input_mask = tf.image.resize_with_pad(datapoint['mask'], (IMG_SIZE, IMG_SIZE))
 
     input_image, input_mask = normalize(input_image, input_mask)
 
     return input_image, input_mask
 
 
-def create_pipeline_performance(path, bs=256, test=False):
+def create_pipeline_performance(path, bs=256, reconstruction=False, test=False):
     """Creates datasets from a directory given as parameter.
 
     The set given as input must include training and validation directory.
@@ -431,9 +456,14 @@ def create_pipeline_performance(path, bs=256, test=False):
         val_dataset = tf.data.Dataset.list_files(val_dir + "images/*.png", seed=VAL_SEED, shuffle=False)
         test_dataset = tf.data.Dataset.list_files(test_dir + "images/*.png", seed=TEST_SEED, shuffle=False)
 
-        train_dataset = train_dataset.map(parse_image)
-        val_dataset = val_dataset.map(parse_image)
-        test_dataset = test_dataset.map(parse_image)
+        if reconstruction:
+            train_dataset = train_dataset.map(parse_image_reconstruction)
+            val_dataset = val_dataset.map(parse_image_reconstruction)
+            test_dataset = test_dataset.map(parse_image_reconstruction)
+        else:
+            train_dataset = train_dataset.map(parse_image)
+            val_dataset = val_dataset.map(parse_image)
+            test_dataset = test_dataset.map(parse_image)
 
         train_num = len([file for file in glob(str(os.path.join(train_dir, "images/*.png")))])
         val_num = len([file for file in glob(str(os.path.join(val_dir, "images/*.png")))])

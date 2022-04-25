@@ -9,7 +9,7 @@ from tensorflow import keras
 
 from data import create_pipeline, create_pipeline_performance
 from metrics import dice_coeff
-from model import custom_model, unet
+from model import custom_model, multi_task_unet
 
 NUM_TRAIN = 2720
 NUM_TEST = 850
@@ -18,7 +18,7 @@ sm.set_framework('tf.keras')
 sm.framework()
 
 
-def model_builder(model, datapath, pw, da):
+def model_builder(model, datapath, pw, da, reconstruction):
     """Build a model by calling custom_model function.
 
     The number of output neurons is automatically set to the number of classes
@@ -51,7 +51,8 @@ def model_builder(model, datapath, pw, da):
         model = custom_model(clNbr, pw, da)
 
     elif model == "unet":
-        model = unet(5)
+        multitask = not reconstruction
+        model = multi_task_unet(5, multitask=multitask)
 
     elif model == "unet_vgg16":
         model = sm.Unet("vgg16", encoder_weights="imagenet", classes=1, activation='sigmoid')
@@ -132,6 +133,9 @@ def main():
                         help="pretrained weights path, imagenet or None")
     parser.add_argument("--custom_model", default="unet",
                         help="load custom or combined model")
+    parser.add_argument("--reconstruction", "-r", default=False,
+                        help="train model to reconstruct input image",
+                        action="store_true")
     parser.add_argument("--load", default=False,
                         help="load previous model",
                         action="store_true")
@@ -151,6 +155,7 @@ def main():
 
     datapath = args.datapath
     custom_model = args.custom_model
+    reconstruction = args.reconstruction
     load_model = args.load
     epochs = args.epochs
     lr = args.lr
@@ -165,7 +170,7 @@ def main():
     path = os.path.join(datapath)
 
     if performance:
-        train_set, val_set, test_set = create_pipeline_performance(path, bs=bs)
+        train_set, val_set, test_set = create_pipeline_performance(path, reconstruction=reconstruction, bs=bs)
     else:
         train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
@@ -192,7 +197,7 @@ def main():
             model_name = "unet_" + custom_model
         else:
             model_name = custom_model
-        model = model_builder(model_name, datapath, pretrained_weights, da)
+        model = model_builder(model_name, datapath, pretrained_weights, da, reconstruction)
 
     #losses = ["binary_crossentropy", weighted_cross_entropy]
     losses = ["binary_crossentropy", dice_loss, bf_loss]
@@ -201,10 +206,16 @@ def main():
     metrics = [dice_coeff, sm.metrics.iou_score]
 
     optimizer = keras.optimizers.Nadam(learning_rate=lr)
-    model.compile(loss=losses,
-                  loss_weights=lw,
-                  optimizer=optimizer,
-                  metrics=metrics)
+
+    if reconstruction:
+        model.compile(loss="mean_squared_error",
+                      optimizer=optimizer,
+                      metrics="accuracy")
+    else:
+        model.compile(loss=losses,
+                      loss_weights=lw,
+                      optimizer=optimizer,
+                      metrics=metrics)
 
     model.summary()
 
@@ -245,10 +256,15 @@ def main():
               steps_per_epoch=EPOCH_STEP_TRAIN,
               validation_steps=EPOCH_STEP_TEST)
 
-    _, dice_metrics, iou_metrics = model.evaluate(x=test_set,
-                                                   steps=EPOCH_STEP_TEST)
-    print("Dice coefficient : {:.02f}".format(dice_metrics))
-    print("IoU score : {:.02f}".format(iou_metrics))
+    if reconstruction:
+        _, accuracy = model.evaluate(x=test_set,
+                                     steps=EPOCH_STEP_TEST)
+        print("Accuracy : {:.02f}".format(accuracy))
+    else:
+        _, dice_metrics, iou_metrics = model.evaluate(x=test_set,
+                                                       steps=EPOCH_STEP_TEST)
+        print("Dice coefficient : {:.02f}".format(dice_metrics))
+        print("IoU score : {:.02f}".format(iou_metrics))
 
 
 if __name__ == "__main__":
