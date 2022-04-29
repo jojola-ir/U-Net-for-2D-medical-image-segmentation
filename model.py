@@ -71,7 +71,7 @@ def unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, pooling_size=
     skips = {}
     for level in range(n_levels):
         for block in range(n_blocks):
-            x = keras.layers.Conv2D(initial_features * 2 ** level, **convpars)(x)
+            x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
             if level <= n_levels // 2 and block == 0:
                 x = keras.layers.Dropout(0.1)(x)
             elif level > n_levels // 2 and level < n_levels - 1 and block == 0:
@@ -85,7 +85,7 @@ def unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, pooling_size=
         x = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x)
         x = keras.layers.Concatenate()([x, skips[level]])
         for block in range(n_blocks):
-            x = keras.layers.Conv2D(initial_features * 2 ** level, **convpars)(x)
+            x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
             if level > n_levels // 2 and block == 0:
                 x = keras.layers.Dropout(0.1)(x)
             elif level <= n_levels // 2 and block == 0:
@@ -93,13 +93,14 @@ def unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, pooling_size=
 
     # output
     activation = 'sigmoid' if out_channels == 1 else 'softmax'
-    x = keras.layers.Conv2D(out_channels, kernel_size=1, activation=activation, padding='same')(x)
+    x = keras.layers.SeparableConv2D(out_channels, kernel_size=1, activation=activation, padding='same')(x)
 
     return keras.Model(inputs=[inputs], outputs=[x], name=f'UNET-L{n_levels}-F{initial_features}')
 
 
-def multi_task_unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, pooling_size=2,
-                    in_channels=1, out_channels=1, multitask=True, custom_model=None):
+def multi_task_unet(n_levels, initial_features=32, n_blocks=2,kernel_size=3,
+                    pooling_size=2, in_channels=1, out_channels=1, reconstruction=False,
+                    segmentation=False, custom_weights=None, merge=False):
     """Build a neural network composed of UNET architecture.
 
     Parameters
@@ -123,76 +124,90 @@ def multi_task_unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, po
 
     encoder_layers = 1
 
-    convpars = dict(kernel_size=kernel_size, activation='relu', padding='same')
+    convpars = dict(kernel_size=kernel_size, activation="relu", padding="same")
 
     # downstream
     skips = {}
     for level in range(n_levels):
         for block in range(n_blocks):
-            x = keras.layers.Conv2D(initial_features * 2 ** level, **convpars)(x)
+            x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
             encoder_layers += 1
             if level <= n_levels // 2 and block == 0:
+                x = keras.layers.BatchNormalization()(x)
                 x = keras.layers.Dropout(0.1)(x)
                 encoder_layers += 1
             elif level > n_levels // 2 and level < n_levels - 1 and block == 0:
+                x = keras.layers.BatchNormalization()(x)
                 x = keras.layers.Dropout(0.3)(x)
                 encoder_layers += 1
         if level < n_levels - 1:
             skips[level] = x
-            x = keras.layers.MaxPool2D(pooling_size)(x)
+            x = keras.layers.MaxPool2D(pooling_size, padding="same")(x)
             encoder_layers += 1
 
-    # upstream : reconstruction
-    for level in reversed(range(n_levels - 1)):
-        if level == n_levels - 2:
-            x_r = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x)
-        else:
-            x_r = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x_r)
-        x_r = keras.layers.Concatenate()([x_r, skips[level]])
-        for block in range(n_blocks):
-            x_r = keras.layers.Conv2D(initial_features * 2 ** level, **convpars)(x_r)
-            if level > n_levels // 2 and block == 0:
-                x_r = keras.layers.Dropout(0.1)(x_r)
-            elif level <= n_levels // 2 and block == 0:
-                x_r = keras.layers.Dropout(0.3)(x_r)
+    if reconstruction:
+        # upstream : reconstruction
+        sub_model_rec = keras.Sequential()
+        for level in reversed(range(n_levels - 1)):
+            if level == n_levels - 2:
+                x_r = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x)
+                sub_model_rec.add(x_r)
+            else:
+                x_r = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x_r)
+                sub_model_rec.add(x_r)
+            x_r = keras.layers.Concatenate()([x_r, skips[level]])
+            sub_model_rec.add(x_r)
+            for block in range(n_blocks):
+                x_r = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x_r)
+                sub_model_rec.add(x_r)
+                if level < n_levels // 2 and block == 0:
+                    x_r = keras.layers.BatchNormalization()(x_r)
+                    sub_model_rec.add(x_r)
+                    #x_r = keras.layers.Dropout(0.1)(x_r)
+                    #sub_model_rec.add(x_r)
 
-    if multitask:
-        # upstream : classification
-        x_c = keras.layers.Flatten()(x)
-        x_c = keras.layers.Dense(128, activation="elu")(x_c)
-        x_c = keras.layers.Dense(64, activation="elu")(x_c)
-        x_c = keras.layers.Dropout(0.5)(x_c)
-
+    if segmentation:
         # upstream : segmentation
+        sub_model_seg = keras.Sequential()
         for level in reversed(range(n_levels - 1)):
             x = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x)
+            sub_model_seg.add(x)
             x = keras.layers.Concatenate()([x, skips[level]])
+            sub_model_seg.add(x)
             for block in range(n_blocks):
-                x = keras.layers.Conv2D(initial_features * 2 ** level, **convpars)(x)
+                x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
+                sub_model_seg.add(x)
                 if level > n_levels // 2 and block == 0:
+                    x = keras.layers.BatchNormalization()(x)
+                    sub_model_seg.add(x)
                     x = keras.layers.Dropout(0.1)(x)
+                    sub_model_seg.add(x)
                 elif level <= n_levels // 2 and block == 0:
+                    x = keras.layers.BatchNormalization()(x)
+                    sub_model_seg.add(x)
                     x = keras.layers.Dropout(0.3)(x)
+                    sub_model_seg.add(x)
 
-        # outputs
-        activation = 'sigmoid' if out_channels == 1 else 'softmax'
-        x_r = keras.layers.Conv2D(out_channels, kernel_size=1, activation=activation, padding='same')(x_r)
-        x_c = keras.layers.Dense(1)(x_c)
-        x = keras.layers.Conv2D(out_channels, kernel_size=1, activation=activation, padding='same')(x)
+    # outputs
+    activation = "sigmoid" if out_channels == 1 else "softmax"
+    outputs = []
+    if reconstruction:
+        x_r = keras.layers.SeparableConv2D(out_channels, kernel_size=1, activation=activation, padding="same")(x_r)
+        outputs.append(x_r)
 
-        model = keras.Model(inputs=[inputs], outputs=[x_r, x_c, x], name=f'UNET-L{n_levels}-F{initial_features}')
+    if segmentation:
+        x = keras.layers.SeparableConv2D(out_channels, kernel_size=1, activation=activation, padding="same")(x)
+        outputs.append(x)
 
-    else:
-        # outputs
-        activation = 'sigmoid' if out_channels == 1 else 'softmax'
-        x = keras.layers.Conv2D(out_channels, kernel_size=1, activation=activation, padding='same')(x_r)
+    model = keras.Model(inputs=[inputs], outputs=outputs, name=f"UNET-L{n_levels}-F{initial_features}")
 
-        model = keras.Model(inputs=[inputs], outputs=[x], name=f'UNET-L{n_levels}-F{initial_features}')
-
-    if custom_model != None:
+    if custom_weights != None:
         print(f"Number of encoder layers : {encoder_layers}")
-        for layers, pretrained_layers in zip(model.layers[:encoder_layers], custom_model.layers[:encoder_layers]):
+        for layers, pretrained_layers in zip(model.layers[:encoder_layers], custom_weights.layers[:encoder_layers]):
             layers.set_weights(pretrained_layers.get_weights())
+
+    if merge:
+        print("Merging reconstruction and segmentation models")
 
     return model
 
@@ -200,6 +215,15 @@ def multi_task_unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, po
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--reconstruction", "-r", default=False,
+                        help="train model to reconstruct input image",
+                        action="store_true")
+    parser.add_argument("--segmentation", "-s", default=False,
+                        help="train model to segment input image",
+                        action="store_true")
+    parser.add_argument("--merge", "-m", default=False,
+                        help="merge reconstruction and segmentation pre-trained model",
+                        action="store_true")
     parser.add_argument("--load", default=False,
                         help="load previous model",
                         action="store_true")
@@ -207,16 +231,18 @@ if __name__ == "__main__":
                         help="path to .h5 file for transfert learning")
 
     args = parser.parse_args()
+    reconstruction = args.reconstruction
+    segmentation = args.segmentation
+    merge = args.merge
     load_model = args.load
     if load_model:
         model_name = "custom"
         model_path = args.modelpath
         custom_model = keras.models.load_model(model_path, compile=False)
         print(f"Transfert learning from {model_path}")
-        model = multi_task_unet(5, custom_model=custom_model)
-
+        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, custom_model=custom_model)
     else:
-        model = multi_task_unet(5)
+        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, multitask=False)
 
     model.summary()
 
