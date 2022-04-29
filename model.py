@@ -168,25 +168,17 @@ def multi_task_unet(n_levels, initial_features=32, n_blocks=2,kernel_size=3,
 
     if segmentation:
         # upstream : segmentation
-        sub_model_seg = keras.Sequential()
         for level in reversed(range(n_levels - 1)):
             x = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x)
-            sub_model_seg.add(x)
             x = keras.layers.Concatenate()([x, skips[level]])
-            sub_model_seg.add(x)
             for block in range(n_blocks):
                 x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
-                sub_model_seg.add(x)
                 if level > n_levels // 2 and block == 0:
                     x = keras.layers.BatchNormalization()(x)
-                    sub_model_seg.add(x)
                     x = keras.layers.Dropout(0.1)(x)
-                    sub_model_seg.add(x)
                 elif level <= n_levels // 2 and block == 0:
                     x = keras.layers.BatchNormalization()(x)
-                    sub_model_seg.add(x)
                     x = keras.layers.Dropout(0.3)(x)
-                    sub_model_seg.add(x)
 
     # outputs
     activation = "sigmoid" if out_channels == 1 else "softmax"
