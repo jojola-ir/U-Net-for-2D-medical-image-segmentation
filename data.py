@@ -5,6 +5,7 @@ from glob import glob, iglob
 
 import imageio.core.util
 import nibabel as nib
+import numpy as np
 import tensorflow as tf
 from skimage import io
 from tensorflow.keras.layers.experimental.preprocessing import (RandomFlip,
@@ -255,6 +256,7 @@ def create_pipeline(path, performance=False, bs=256):
     return train_pipeline, val_pipeline, test_pipeline
 
 
+@tf.function
 def parse_image(path):
     """Load an image and its annotation (mask) and returning
     a dictionary.
@@ -282,6 +284,7 @@ def parse_image(path):
     return {'image': image, 'mask': mask}
 
 
+@tf.function
 def parse_image_reconstruction(path):
     """Load an image and its annotation (mask) and returning
     a dictionary.
@@ -400,8 +403,8 @@ def load_image_test(datapoint):
 
     IMG_SIZE = 160
 
-    input_image = tf.image.resize_with_pad(datapoint['image'], (IMG_SIZE, IMG_SIZE))
-    input_mask = tf.image.resize_with_pad(datapoint['mask'], (IMG_SIZE, IMG_SIZE))
+    input_image = tf.image.resize_with_pad(datapoint['image'], IMG_SIZE, IMG_SIZE)
+    input_mask = tf.image.resize_with_pad(datapoint['mask'], IMG_SIZE, IMG_SIZE)
 
     input_image, input_mask = normalize(input_image, input_mask)
 
@@ -559,4 +562,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-import numpy as np
