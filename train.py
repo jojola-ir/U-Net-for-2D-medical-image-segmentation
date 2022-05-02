@@ -9,7 +9,7 @@ from tensorflow import keras
 
 from data import create_pipeline, create_pipeline_performance
 from losses import wce_dice_loss
-from metrics import dice_coeff
+from metrics import dice_coeff, recall, specificity
 from model import custom_model, multi_task_unet
 
 NUM_TRAIN = 2720
@@ -190,7 +190,7 @@ def main():
 
     losses = [wce_dice]
 
-    metrics = [dice_coeff]
+    metrics = [dice_coeff, recall, specificity]
 
     if reconstruction:
         optimizer = keras.optimizers.Adam(learning_rate=lr)
@@ -248,9 +248,11 @@ def main():
         print("MAE : {:.02f}".format(mae_metrics))
         print("Dice : {:.02f}".format(dice_metrics))
     else:
-        _, dice_metrics = model.evaluate(x=test_set,
+        _, dice_metrics, recall_metrics, specificity_metrics = model.evaluate(x=test_set,
                                                        steps=EPOCH_STEP_TEST)
         print("Dice coefficient : {:.02f}".format(dice_metrics))
+        print("Recall : {:.02f}".format(recall_metrics))
+        print("Specificity : {:.02f}".format(specificity_metrics))
 
 
 if __name__ == "__main__":
