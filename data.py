@@ -366,7 +366,7 @@ def load_image_train(datapoint):
         input_mask = tf.image.flip_up_down(input_mask)
 
     if tf.random.uniform(()) > 0.5:
-        rd = np.random.random()
+        rd = np.random.uniform(low=0.4, high=1.0)
         input_image = tf.image.central_crop(input_image, central_fraction=rd)
         input_mask = tf.image.central_crop(input_mask, central_fraction=rd)
 

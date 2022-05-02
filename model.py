@@ -134,11 +134,11 @@ def multi_task_unet(n_levels, initial_features=32, n_blocks=2,kernel_size=3,
             encoder_layers += 1
             if level <= n_levels // 2 and block == 0:
                 x = keras.layers.BatchNormalization()(x)
-                x = keras.layers.Dropout(0.1)(x)
+                x = keras.layers.Dropout(0.3)(x)
                 encoder_layers += 1
             elif level > n_levels // 2 and level < n_levels - 1 and block == 0:
                 x = keras.layers.BatchNormalization()(x)
-                x = keras.layers.Dropout(0.3)(x)
+                x = keras.layers.Dropout(0.5)(x)
                 encoder_layers += 1
         if level < n_levels - 1:
             skips[level] = x
@@ -147,24 +147,17 @@ def multi_task_unet(n_levels, initial_features=32, n_blocks=2,kernel_size=3,
 
     if reconstruction:
         # upstream : reconstruction
-        sub_model_rec = keras.Sequential()
         for level in reversed(range(n_levels - 1)):
             if level == n_levels - 2:
                 x_r = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x)
-                sub_model_rec.add(x_r)
             else:
                 x_r = keras.layers.Conv2DTranspose(initial_features * 2 ** level, strides=pooling_size, **convpars)(x_r)
-                sub_model_rec.add(x_r)
             x_r = keras.layers.Concatenate()([x_r, skips[level]])
-            sub_model_rec.add(x_r)
             for block in range(n_blocks):
                 x_r = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x_r)
-                sub_model_rec.add(x_r)
                 if level < n_levels // 2 and block == 0:
                     x_r = keras.layers.BatchNormalization()(x_r)
-                    sub_model_rec.add(x_r)
                     #x_r = keras.layers.Dropout(0.1)(x_r)
-                    #sub_model_rec.add(x_r)
 
     if segmentation:
         # upstream : segmentation
@@ -175,10 +168,10 @@ def multi_task_unet(n_levels, initial_features=32, n_blocks=2,kernel_size=3,
                 x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
                 if level > n_levels // 2 and block == 0:
                     x = keras.layers.BatchNormalization()(x)
-                    x = keras.layers.Dropout(0.1)(x)
+                    x = keras.layers.Dropout(0.3)(x)
                 elif level <= n_levels // 2 and block == 0:
                     x = keras.layers.BatchNormalization()(x)
-                    x = keras.layers.Dropout(0.3)(x)
+                    x = keras.layers.Dropout(0.5)(x)
 
     # outputs
     activation = "sigmoid" if out_channels == 1 else "softmax"
@@ -234,7 +227,7 @@ if __name__ == "__main__":
         print(f"Transfert learning from {model_path}")
         model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, custom_model=custom_model)
     else:
-        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, multitask=False)
+        model = multi_task_unet(5, initial_features=32, reconstruction=reconstruction, segmentation=segmentation)
 
     model.summary()
 

@@ -8,6 +8,7 @@ import segmentation_models as sm
 from tensorflow import keras
 
 from data import create_pipeline, create_pipeline_performance
+from losses import wce_dice_loss
 from metrics import dice_coeff
 from model import custom_model, multi_task_unet
 
@@ -18,7 +19,7 @@ sm.set_framework('tf.keras')
 sm.framework()
 
 
-def model_builder(model, datapath, pw, da, reconstruction):
+def model_builder(model, datapath, pw, da=False, reconstruction=True, segmentation=False, custom_weights=None):
     """Build a model by calling custom_model function.
 
     The number of output neurons is automatically set to the number of classes
@@ -50,18 +51,8 @@ def model_builder(model, datapath, pw, da, reconstruction):
         clNbr = len(classes)
         model = custom_model(clNbr, pw, da)
 
-    elif model == "unet":
-        multitask = not reconstruction
-        model = multi_task_unet(5, multitask=multitask)
-
-    elif model == "unet_vgg16":
-        model = sm.Unet("vgg16", encoder_weights="imagenet", classes=1, activation='sigmoid')
-
-    elif model == "unet_resnet50":
-        model = sm.Unet("resnet50", encoder_weights="imagenet", classes=1, activation='sigmoid')
-
-    elif model == "unet_inceptionv3":
-        model = sm.Unet("inceptionv3", encoder_weights="imagenet", classes=1, activation='sigmoid')
+    else:
+        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, custom_weights=custom_weights)
 
     return model
 
@@ -98,8 +89,8 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", patience=2, early_s
         print(f"Early stopping patience : {patience}")
         early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_dice_coeff",
                                                           patience=patience,
-                                                          verbose=1,
-                                                          mode="max")
+                                                          mode="max",
+                                                          verbose=1)
         callbacks.append(early_stopping_cb)
 
     checkpoint_cb = keras.callbacks.ModelCheckpoint(checkpoint_path,
@@ -129,26 +120,29 @@ def main():
     parser.add_argument("--performace", "-p", default=False,
                         help="activate performance configuration",
                         action="store_true")
-    parser.add_argument("--weights", "-w", default="imagenet",
+    parser.add_argument("--weights", "-w", default=None,
                         help="pretrained weights path, imagenet or None")
     parser.add_argument("--custom_model", default="unet",
                         help="load custom or combined model")
+    parser.add_argument("--multitask", default=False,
+                        help="activate reconstruction and segmentation",
+                        action="store_true")
     parser.add_argument("--reconstruction", "-r", default=False,
                         help="train model to reconstruct input image",
+                        action="store_true")
+    parser.add_argument("--segmentation", "-s", default=False,
+                        help="train model to segment input image",
                         action="store_true")
     parser.add_argument("--load", default=False,
                         help="load previous model",
                         action="store_true")
     parser.add_argument("--modelpath", default="/models/run1.h5",
                         help="path to .h5 file for transfert learning")
-    parser.add_argument("--augmentation", "-a", default=False,
-                        help="activate data augmentation",
-                        action="store_true")
     parser.add_argument("--batch", "-b", type=int, default=16,
                         help="batch size")
     parser.add_argument("--datapath", help="path to the dataset")
     parser.add_argument("--log", default=f"logs/run{now.strftime('%m_%d_%H_%M')}", help="set path to logs")
-    parser.add_argument("--checkpoint", "-c", default=f"models/run{now.strftime('%m_%d_%H_%M')}.h5",
+    parser.add_argument("--checkpoint", "-c", default=f"models/benchmarks/run{now.strftime('%m_%d_%H_%M')}.h5",
                         help="set checkpoints path and name")
 
     args = parser.parse_args()
@@ -156,6 +150,8 @@ def main():
     datapath = args.datapath
     custom_model = args.custom_model
     reconstruction = args.reconstruction
+    segmentation = args.segmentation
+    weights = args.weights
     load_model = args.load
     epochs = args.epochs
     lr = args.lr
@@ -163,7 +159,6 @@ def main():
     cppath = args.checkpoint
     performance = args.performace
     pretrained_weights = args.weights
-    da = args.augmentation
     bs = args.batch
 
     # data loading
@@ -177,43 +172,34 @@ def main():
 
     dice_loss = sm.losses.DiceLoss()
     bf_loss = sm.losses.BinaryFocalLoss()
+    wce_dice = wce_dice_loss
 
     # model building
     if load_model:
         model_name = "custom"
         model_path = args.modelpath
-        model = keras.models.load_model(model_path,
-                                        custom_objects={"dice_loss": dice_loss,
-                                                        "binary_focal_loss": bf_loss,
-                                                        "dice_coeff": dice_coeff,
-                                                        "iou_score": sm.metrics.iou_score})
+        model = keras.models.load_model(model_path, compile=False)
         print(f"Transfert learning from {model_path}")
     else:
-        if custom_model.startswith("unet") is False:
-            #preprocess_input = sm.get_preprocessing(custom_model)
-            #train_set = preprocess_input(train_set)
-            #val_set = preprocess_input(val_set)
-            #test_set = preprocess_input(test_set)
-            model_name = "unet_" + custom_model
-        else:
-            model_name = custom_model
-        model = model_builder(model_name, datapath, pretrained_weights, da, reconstruction)
+        model_name = custom_model
 
-    #losses = ["binary_crossentropy", weighted_cross_entropy]
-    losses = ["binary_crossentropy", dice_loss, bf_loss]
-    lw = [1.0, 0.5, 0.5]
+        if weights != None:
+            weights = keras.models.load_model(weights, compile=False)
+        model = model_builder(model=model_name, datapath=datapath, pw=pretrained_weights,
+                              reconstruction=reconstruction, segmentation=segmentation, custom_weights=weights)
 
-    metrics = [dice_coeff, sm.metrics.iou_score]
+    losses = [wce_dice]
 
-    optimizer = keras.optimizers.Nadam(learning_rate=lr)
+    metrics = [dice_coeff]
 
     if reconstruction:
+        optimizer = keras.optimizers.Adam(learning_rate=lr)
         model.compile(loss="mean_squared_error",
                       optimizer=optimizer,
-                      metrics="accuracy")
+                      metrics=metrics)
     else:
+        optimizer = keras.optimizers.Nadam(learning_rate=lr)
         model.compile(loss=losses,
-                      loss_weights=lw,
                       optimizer=optimizer,
                       metrics=metrics)
 
@@ -225,14 +211,14 @@ def main():
 
     keras.utils.plot_model(model,
                            to_file=os.path.join(model_architecture_path,
-                                                       f"model_unet_{model_name}_{now.strftime('%m_%d_%H_%M')}.png"),
+                                                f"model_unet_{model_name}_{now.strftime('%m_%d_%H_%M')}.png"),
                            show_shapes=True)
 
     # callbacks
     run_logs = logpath
     checkpoint_path = cppath
     if epochs < 40:
-        cb_patience = 3
+        cb_patience = 5
     else:
         cb_patience = epochs // 10
     cb = create_callbacks(run_logs, checkpoint_path, cb_patience, True)
@@ -257,14 +243,14 @@ def main():
               validation_steps=EPOCH_STEP_TEST)
 
     if reconstruction:
-        _, accuracy = model.evaluate(x=test_set,
+        _, mae_metrics, dice_metrics = model.evaluate(x=test_set,
                                      steps=EPOCH_STEP_TEST)
-        print("Accuracy : {:.02f}".format(accuracy))
+        print("MAE : {:.02f}".format(mae_metrics))
+        print("Dice : {:.02f}".format(dice_metrics))
     else:
-        _, dice_metrics, iou_metrics = model.evaluate(x=test_set,
+        _, dice_metrics = model.evaluate(x=test_set,
                                                        steps=EPOCH_STEP_TEST)
         print("Dice coefficient : {:.02f}".format(dice_metrics))
-        print("IoU score : {:.02f}".format(iou_metrics))
 
 
 if __name__ == "__main__":
