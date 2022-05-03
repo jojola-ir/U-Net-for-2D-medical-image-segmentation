@@ -1,6 +1,6 @@
 # Medical image classification and segmentation
 
-This project is a simple Deep learning training pipeline for classification and segmentation algorithm. It should work 
+This project is a simple Deep learning training pipeline for classification and segmentation algorithm. It should work
 as expected with Tensorflow 2.5. These are the last versions at this time, newer ones might break support. Previous
 version as tensorflow 2.4 should work too, but we don't recommend you to use older versions.
 
@@ -20,8 +20,8 @@ directories for training and validation datas.
 For this example, I use `A Large Scale Fish Dataset` by Oğuzhan Ulucan. You can find it
 at https://www.kaggle.com/crowww/a-large-scale-fish-dataset.
 
-**DISCLAIMER: This project provides two different models that are ResNet50 ans UNET-L4-F32. They don't work the same
-way and they aren't made for the same tasks. ResNet50 model is made for classification tasks and UNET model is for
+**DISCLAIMER: This project provides two different models that are ResNet50 ans UNET-L4-F32. They don't work the same way
+and they aren't made for the same tasks. ResNet50 model is made for classification tasks and UNET model is for
 generation ones.**
 
 For the training, run the program `train.py` as explained above. You can run it directly by specifying the path to the
@@ -59,7 +59,7 @@ If you use CLI method without adding parameters, epochs number will be set to 2,
 and logs path and checkpoint path to the main directory.
 
 There is a module for generating `.png` images from `.nii` ones. For this purpose, run `data.py` program with
-`--generate` as argument. You have to specify the input path (path to `.nii` images) and the output path. The input 
+`--generate` as argument. You have to specify the input path (path to `.nii` images) and the output path. The input
 directory must include `imagesTr/` and `labelsTr/` subdirectories respectively for `.nii` images and `.nii` masks.
 
 You can recreate this project and train it on your own dataset by :

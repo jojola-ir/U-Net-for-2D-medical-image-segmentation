@@ -43,8 +43,8 @@ def random_splitter(src, dest, test_rate, clear):
     val_rate = 0.1
 
     splitfolders.ratio(src, output=dest,
-                       seed=1337, ratio=(1 - (test_rate + val_rate), val_rate, test_rate), group_prefix=None, move=False)
-
+                       seed=1337, ratio=(1 - (test_rate + val_rate), val_rate, test_rate), group_prefix=None,
+                       move=False)
 
 
 def main():
@@ -64,7 +64,6 @@ def main():
     clear = args.clear
 
     random_splitter(datapath, output, test_rate, clear)
-
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ def display(display_list):
     title = ['Input Image', 'True Mask', 'Predicted Mask']
 
     for i in range(len(display_list)):
-        plt.subplot(1, len(display_list), i+1)
+        plt.subplot(1, len(display_list), i + 1)
         plt.title(title[i])
         plt.imshow(keras.utils.array_to_img(display_list[i]), cmap='gray')
         plt.axis('off')
