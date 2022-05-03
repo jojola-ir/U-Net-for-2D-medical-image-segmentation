@@ -22,7 +22,7 @@ def weighted_cross_entropy(targets, inputs, beta=0.2):
 
 
 def bce_dice_loss(targets, inputs):
-    loss = BinaryCrossentropy() + dice_loss(targets, inputs)
+    loss = BinaryCrossentropy(targets, inputs) + dice_loss(targets, inputs)
     return loss
 
 
