@@ -8,7 +8,7 @@ import segmentation_models as sm
 from tensorflow import keras
 
 from data import create_pipeline, create_pipeline_performance
-from losses import wce_dice_loss
+from losses import bce_dice_loss, focal_tversky_loss, log_cosh_dice_loss, weighted_cross_entropy, wce_dice_loss
 from metrics import dice_coeff, recall, specificity
 from model import custom_model, multi_task_unet
 
@@ -52,7 +52,8 @@ def model_builder(model, datapath, pw, da=False, reconstruction=True, segmentati
         model = custom_model(clNbr, pw, da)
 
     else:
-        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, custom_weights=custom_weights)
+        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation,
+                                custom_weights=custom_weights)
 
     return model
 
@@ -90,6 +91,7 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", patience=2, early_s
         early_stopping_cb = keras.callbacks.EarlyStopping(monitor="val_dice_coeff",
                                                           patience=patience,
                                                           mode="max",
+                                                          restore_best_weights=True,
                                                           verbose=1)
         callbacks.append(early_stopping_cb)
 
@@ -97,13 +99,25 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", patience=2, early_s
                                                     save_best_only=True)
     callbacks.append(checkpoint_cb)
 
-    tensorboard_cb = keras.callbacks.TensorBoard(run_logdir)
+    tensorboard_cb = keras.callbacks.TensorBoard(log_dir=run_logdir,
+                                                 histogram_freq=1)
     callbacks.append(tensorboard_cb)
 
-    remote_monitor_cb = keras.callbacks.RemoteMonitor(root="http://localhost:9000",
-                                                      path="/publish/epoch/end/",
-                                                      field="data")
-    callbacks.append(remote_monitor_cb)
+    reduce_lr_cb = keras.callbacks.ReduceLROnPlateau(monitor="val_loss",
+                                                     factor=0.1,
+                                                     patience=2,
+                                                     min_lr=0.000001,
+                                                     verbose=1)
+    callbacks.append(reduce_lr_cb)
+
+    now = datetime.now()
+    csvlogger_cb = keras.callbacks.CSVLogger(filename=f"./csv_logs/training_{now.strftime('%m_%d_%H_%M')}.csv",
+                                             separator=",",
+                                             append=True)
+    callbacks.append(csvlogger_cb)
+
+    backup_restore_cb = keras.callbacks.BackupAndRestore(backup_dir="./tmp/backup")
+    callbacks.append(backup_restore_cb)
 
     return callbacks
 
@@ -169,11 +183,6 @@ def main():
     else:
         train_set, val_set, test_set = create_pipeline(path, bs=bs)
 
-
-    dice_loss = sm.losses.DiceLoss()
-    bf_loss = sm.losses.BinaryFocalLoss()
-    wce_dice = wce_dice_loss
-
     # model building
     if load_model:
         model_name = "custom"
@@ -188,7 +197,17 @@ def main():
         model = model_builder(model=model_name, datapath=datapath, pw=pretrained_weights,
                               reconstruction=reconstruction, segmentation=segmentation, custom_weights=weights)
 
-    losses = [wce_dice]
+    dice_loss = sm.losses.DiceLoss()
+    bf_loss = sm.losses.BinaryFocalLoss()
+    bce = keras.losses.BinaryCrossentropy()
+    bce_dice = bce_dice_loss
+    wce = weighted_cross_entropy
+    wce_dice = wce_dice_loss
+    lcd_loss = log_cosh_dice_loss
+    ft_loss = focal_tversky_loss
+
+    # losses = [dice_loss, wce]
+    losses = [bce]
 
     metrics = [dice_coeff, recall, specificity]
 
@@ -198,7 +217,7 @@ def main():
                       optimizer=optimizer,
                       metrics=metrics)
     else:
-        optimizer = keras.optimizers.Nadam(learning_rate=lr)
+        optimizer = keras.optimizers.Adam(learning_rate=lr)
         model.compile(loss=losses,
                       optimizer=optimizer,
                       metrics=metrics)
@@ -244,15 +263,15 @@ def main():
 
     if reconstruction:
         _, mae_metrics, dice_metrics = model.evaluate(x=test_set,
-                                     steps=EPOCH_STEP_TEST)
-        print("MAE : {:.02f}".format(mae_metrics))
-        print("Dice : {:.02f}".format(dice_metrics))
+                                                      steps=EPOCH_STEP_TEST)
+        print("MAE : {:.03f}".format(mae_metrics))
+        print("Dice : {:.03f}".format(dice_metrics))
     else:
         _, dice_metrics, recall_metrics, specificity_metrics = model.evaluate(x=test_set,
-                                                       steps=EPOCH_STEP_TEST)
-        print("Dice coefficient : {:.02f}".format(dice_metrics))
-        print("Recall : {:.02f}".format(recall_metrics))
-        print("Specificity : {:.02f}".format(specificity_metrics))
+                                                                              steps=EPOCH_STEP_TEST)
+        print("Dice coefficient : {:.03f}".format(dice_metrics))
+        print("Recall : {:.03f}".format(recall_metrics))
+        print("Specificity : {:.03f}".format(specificity_metrics))
 
 
 if __name__ == "__main__":

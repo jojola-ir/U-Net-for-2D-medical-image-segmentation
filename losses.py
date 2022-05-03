@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow.keras.losses import BinaryCrossentropy
 
 from metrics import dice_coeff, tversky
 
@@ -21,8 +20,15 @@ def weighted_cross_entropy(targets, inputs, beta=0.2):
     return tf.reduce_mean(o)
 
 
+def BinaryCrossEntropy(y_true, y_pred):
+    y_pred = tf.keras.backend.clip(y_pred, tf.keras.backend.epsilon(), 1 - tf.keras.backend.epsilon())
+    term_0 = (1 - y_true) * tf.keras.backend.log(1 - y_pred + tf.keras.backend.epsilon())
+    term_1 = y_true * tf.keras.backend.log(y_pred + tf.keras.backend.epsilon())
+    return -tf.keras.backend.mean(term_0 + term_1, axis=0)
+
+
 def bce_dice_loss(targets, inputs):
-    loss = BinaryCrossentropy(targets, inputs) + dice_loss(targets, inputs)
+    loss = BinaryCrossEntropy(targets, inputs) + dice_loss(targets, inputs)
     return loss
 
 

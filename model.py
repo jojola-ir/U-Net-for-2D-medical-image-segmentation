@@ -98,7 +98,7 @@ def unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, pooling_size=
     return keras.Model(inputs=[inputs], outputs=[x], name=f'UNET-L{n_levels}-F{initial_features}')
 
 
-def multi_task_unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3,
+def multi_task_unet(n_levels, initial_features=32, n_blocks=2, kernel_size=3,
                     pooling_size=2, in_channels=1, out_channels=1, reconstruction=False,
                     segmentation=False, custom_weights=None, merge=False):
     """Build a neural network composed of UNET architecture.
@@ -132,14 +132,14 @@ def multi_task_unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3,
         for block in range(n_blocks):
             x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
             encoder_layers += 1
-            '''if level <= n_levels // 2 and block == 0:
+            if level <= n_levels // 2 and block == 0:
                 x = keras.layers.BatchNormalization()(x)
                 x = keras.layers.Dropout(0.3)(x)
                 encoder_layers += 1
             elif level > n_levels // 2 and level < n_levels - 1 and block == 0:
                 x = keras.layers.BatchNormalization()(x)
                 x = keras.layers.Dropout(0.5)(x)
-                encoder_layers += 1'''
+                encoder_layers += 1
         if level < n_levels - 1:
             skips[level] = x
             x = keras.layers.MaxPool2D(pooling_size, padding="same")(x)
@@ -166,12 +166,12 @@ def multi_task_unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3,
             x = keras.layers.Concatenate()([x, skips[level]])
             for block in range(n_blocks):
                 x = keras.layers.SeparableConv2D(initial_features * 2 ** level, **convpars)(x)
-                '''if level > n_levels // 2 and block == 0:
+                if level > n_levels // 2 and block == 0:
                     x = keras.layers.BatchNormalization()(x)
                     x = keras.layers.Dropout(0.3)(x)
                 elif level <= n_levels // 2 and block == 0:
                     x = keras.layers.BatchNormalization()(x)
-                    x = keras.layers.Dropout(0.5)(x)'''
+                    x = keras.layers.Dropout(0.5)(x)
 
     # outputs
     activation = "sigmoid" if out_channels == 1 else "softmax"
@@ -227,7 +227,7 @@ if __name__ == "__main__":
         print(f"Transfert learning from {model_path}")
         model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, custom_model=custom_model)
     else:
-        model = multi_task_unet(4, initial_features=64, reconstruction=reconstruction, segmentation=segmentation)
+        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation)
 
     model.summary()
 
