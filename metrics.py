@@ -24,3 +24,14 @@ def specificity(targets, inputs):
     possible_negatives = K.sum(K.round(K.clip(1 - targets, 0, 1)))
 
     return true_negatives / (possible_negatives + K.epsilon())
+
+
+def tversky(targets, inputs):
+    smooth = tf.keras.backend.epsilon()
+    targets_pos = tf.keras.backend.flatten(targets)
+    inputs_pos = tf.keras.backend.flatten(inputs)
+    true_pos = tf.keras.backend.sum(targets_pos * inputs_pos)
+    false_neg = tf.keras.backend.sum(targets_pos * (1 - inputs_pos))
+    false_pos = tf.keras.backend.sum((1 - targets_pos) * inputs_pos)
+    alpha = 0.7
+    return (true_pos + smooth) / (true_pos + alpha * false_neg + (1 - alpha) * false_pos + smooth)
