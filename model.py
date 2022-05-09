@@ -43,7 +43,7 @@ def custom_model(clNbr, pw, da=False):
     return model
 
 
-def unet(n_levels, initial_features=64, n_blocks=2, kernel_size=3, pooling_size=2, in_channels=1, out_channels=1):
+def unet(n_levels, initial_features=32, n_blocks=2, kernel_size=3, pooling_size=2, in_channels=1, out_channels=1):
     """Build a neural network composed of UNET architecture.
 
     Parameters
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         model_path = args.modelpath
         custom_model = keras.models.load_model(model_path, compile=False)
         print(f"Transfert learning from {model_path}")
-        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation, custom_model=custom_model)
+        model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation)
     else:
         model = multi_task_unet(5, reconstruction=reconstruction, segmentation=segmentation)
 
