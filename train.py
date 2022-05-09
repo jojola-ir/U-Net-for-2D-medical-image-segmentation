@@ -100,15 +100,16 @@ def create_callbacks(run_logdir, checkpoint_path="model.h5", patience=2, early_s
     callbacks.append(checkpoint_cb)
 
     tensorboard_cb = keras.callbacks.TensorBoard(log_dir=run_logdir,
-                                                 histogram_freq=1)
+                                                 histogram_freq=1,
+                                                 write_images=True)
     callbacks.append(tensorboard_cb)
 
-    reduce_lr_cb = keras.callbacks.ReduceLROnPlateau(monitor="val_loss",
-                                                     factor=0.1,
-                                                     patience=2,
+    '''reduce_lr_cb = keras.callbacks.ReduceLROnPlateau(monitor="val_loss",
+                                                     factor=0.5,
+                                                     patience=1,
                                                      min_lr=0.000001,
                                                      verbose=1)
-    callbacks.append(reduce_lr_cb)
+    callbacks.append(reduce_lr_cb)'''
 
     now = datetime.now()
     csvlogger_cb = keras.callbacks.CSVLogger(filename=f"./csv_logs/training_{now.strftime('%m_%d_%H_%M')}.csv",
@@ -135,7 +136,7 @@ def main():
                         help="activate performance configuration",
                         action="store_true")
     parser.add_argument("--weights", "-w", default=None,
-                        help="pretrained weights path, imagenet or None")
+                        help="pretrained weights path")
     parser.add_argument("--custom_model", default="unet",
                         help="load custom or combined model")
     parser.add_argument("--multitask", default=False,
@@ -206,18 +207,22 @@ def main():
     lcd_loss = log_cosh_dice_loss
     ft_loss = focal_tversky_loss
 
-    # losses = [dice_loss, wce]
-    losses = [bce]
+    decay_steps = (NUM_TRAIN // bs) * epochs
+    lr_scheduler = keras.optimizers.schedules.PolynomialDecay(initial_learning_rate=lr,
+                                                              decay_steps=decay_steps,
+                                                              end_learning_rate=0.000001,
+                                                              power=1.5)
 
+    losses = [wce]
     metrics = [dice_coeff, recall, specificity]
 
     if reconstruction:
-        optimizer = keras.optimizers.Adam(learning_rate=lr)
+        optimizer = keras.optimizers.Adam(learning_rate=lr_scheduler)
         model.compile(loss="mean_squared_error",
                       optimizer=optimizer,
                       metrics=metrics)
     else:
-        optimizer = keras.optimizers.Adam(learning_rate=lr)
+        optimizer = keras.optimizers.Adam(learning_rate=lr_scheduler)
         model.compile(loss=losses,
                       optimizer=optimizer,
                       metrics=metrics)
