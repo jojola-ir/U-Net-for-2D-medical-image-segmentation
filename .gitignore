@@ -3,3 +3,5 @@
 /models
 *.xml
 *.iml
+/csv_logs/
+/architecture/
