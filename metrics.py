@@ -20,10 +20,9 @@ def recall(targets, inputs):
 
 
 def specificity(targets, inputs):
-    true_negatives = K.sum(K.round(K.clip((1 - targets) * (1 - inputs), 0, 1)))
-    possible_negatives = K.sum(K.round(K.clip(1 - targets, 0, 1)))
-
-    return true_negatives / (possible_negatives + K.epsilon())
+    tn = K.sum(K.round(K.clip((1 - targets) * (1 - inputs), 0, 1)))
+    fp = K.sum(K.round(K.clip((1 - targets) * inputs, 0, 1)))
+    return tn / (tn + fp + K.epsilon())
 
 
 def tversky(targets, inputs):
