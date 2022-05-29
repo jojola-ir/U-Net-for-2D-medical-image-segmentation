@@ -357,14 +357,6 @@ def load_image_train(datapoint):
     input_image = tf.image.resize_with_pad(datapoint['image'], IMG_SIZE, IMG_SIZE)
     input_mask = tf.image.resize_with_pad(datapoint['mask'], IMG_SIZE, IMG_SIZE)
 
-    '''seed = np.random.randint(low=0, high=200)
-
-    input_image = tf.image.random_flip_left_right(image=input_image, seed=seed)
-    input_mask = tf.image.random_flip_left_right(image=input_mask, seed=seed)
-
-    input_image = tf.image.random_flip_up_down(image=input_image, seed=seed)
-    input_mask = tf.image.random_flip_up_down(image=input_mask, seed=seed)'''
-
     if tf.random.uniform(()) > 0.5:
         input_image = tf.image.flip_left_right(input_image)
         input_mask = tf.image.flip_left_right(input_mask)

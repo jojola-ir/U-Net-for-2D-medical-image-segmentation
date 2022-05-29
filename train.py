@@ -8,7 +8,8 @@ import segmentation_models as sm
 from tensorflow import keras
 
 from data import create_pipeline, create_pipeline_performance
-from losses import bce_dice_loss, focal_tversky_loss, log_cosh_dice_loss, weighted_cross_entropy, wce_dice_loss
+from losses import bce_dice_loss, focal_tversky_loss, log_cosh_dice_loss, \
+    weighted_cross_entropy, weighted_hausdorff_distance, wce_dice_loss
 from metrics import dice_coeff, recall, specificity
 from model import custom_model, multi_task_unet
 
@@ -207,14 +208,17 @@ def main():
     lcd_loss = log_cosh_dice_loss
     ft_loss = focal_tversky_loss
 
+    precision = keras.metrics.Precision()
+    whddt = weighted_hausdorff_distance
+
     decay_steps = (NUM_TRAIN // bs) * epochs
     lr_scheduler = keras.optimizers.schedules.PolynomialDecay(initial_learning_rate=lr,
                                                               decay_steps=decay_steps,
                                                               end_learning_rate=0.000001,
                                                               power=1.5)
 
-    losses = [wce]
-    metrics = [dice_coeff, recall, specificity]
+    losses = [bce_dice]
+    metrics = [dice_coeff, recall, precision]
 
     if reconstruction:
         optimizer = keras.optimizers.Adam(learning_rate=lr_scheduler)
@@ -272,11 +276,12 @@ def main():
         print("MAE : {:.03f}".format(mae_metrics))
         print("Dice : {:.03f}".format(dice_metrics))
     else:
-        _, dice_metrics, recall_metrics, specificity_metrics = model.evaluate(x=test_set,
-                                                                              steps=EPOCH_STEP_TEST)
+        _, dice_metrics, recall_metrics, precision_metrics = model.evaluate(x=test_set,
+                                                                            steps=EPOCH_STEP_TEST)
         print("Dice coefficient : {:.03f}".format(dice_metrics))
         print("Recall : {:.03f}".format(recall_metrics))
-        print("Specificity : {:.03f}".format(specificity_metrics))
+        print("Precision : {:.03f}".format(precision_metrics))
+        #print("Hausdorff DT : {:.03f}".format(whddt_metrics))
 
 
 if __name__ == "__main__":
